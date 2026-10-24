@@ -208,13 +208,14 @@
     hp: { tank: 0.45, dps: 0.2, support: 0.3, healer: 0.35 },          // 최대 HP 1%당 (하드 ×1.5)
     atk: { tank: 0.15, dps: 0.3, support: 0.05, healer: 0.02 },        // 공격 +1%당. −면 ×3 (공격 자리 ×5: 처치 타이밍이 밀려 크게 진다)
     regen: { tank: 1.6, dps: 0.9, support: 0.9, healer: 0.6 },         // 자기 라운드 회복 1%당
-    regenLow: 3.2, ultAll: 0.7, killAll: 0.9,                          // 아군 전원·가장 다친 아군 회복 1%당
-    guardAll: { tank: 0.7, healer: 0.7, dps: 0.2, support: 0.3 },      // 방어를 자주 하는 자리만
+    regenLow: { tank: 2.0, dps: 0.25, support: 1.2, healer: 2.2 },  // 가장 다친 아군 1%당. 공격 자리에는 거의 안 준다
+    ultAll: 0.25, killAll: 0.9,
+    guardAll: { tank: 0.25, healer: 0.7, dps: 0.2, support: 0.3 },
     leech: { tank: 0.08, dps: 0.18, support: 0.05, healer: 0.03 },
     killHeal: { tank: 0.08, dps: 0.2, support: 0.05, healer: 0.03 },
-    guardHeal: { tank: 0.25, dps: 0.05, support: 0.05, healer: 0.05 },
+    guardHeal: { tank: 0.18, dps: 0.05, support: 0.05, healer: 0.05 },
     ultGauge: 0.06, killGauge: { tank: 0.02, dps: 0.05, support: 0.02, healer: 0.01 },
-    low: { tank: 0.6, dps: 0.6, support: 0.2, healer: 0 },            // (배율 −1) × 10 당
+    low: { tank: 0.6, dps: 0.3, support: 0.2, healer: 0 },            // (배율 −1) × 10 당. 공격 자리는 무조건 공격이 더 크다
   };
   // 시작 게이지 1점당 (동료마다): 세라는 성역을 일찍, 레오는 큰 획을 일찍. 아리아는 「부위 분쇄」를 충전 적에 아껴야 해서 −
   var GAUGE_W = { sera: 0.3, leo: 0.15, odette: 0.12, noel: 0.12, mariel: 0.08, aria: -0.1 };
@@ -230,7 +231,10 @@
       else {
         var w = VAL[k]; if (w == null) return;
         var c = typeof w === "number" ? w : (w[r] || 0);
-        if ((k === "killHeal" || k === "killGauge") && FINISH[id]) c *= FINISH[id];
+        if ((k === "killHeal" || k === "killGauge") && FINISH[id]) {
+          var dpsN = party.filter(function (pid) { return (ROLE[pid] || "dps") === "dps"; }).length;
+          c *= dpsN >= 2 ? FINISH[id] : 0.55;
+        }
         pts = k === "low" ? (v - 1) * 100 * c / 10 : k === "ultGauge" || k === "killGauge" ? v * c : v * 100 * c;
         if (k === "atk" && v < 0) pts *= r === "dps" ? 5 : 3;
         if (k === "hp" && hard) pts *= 1.5;
