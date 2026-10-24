@@ -22,7 +22,7 @@
     rest: function () { return "우물 HP 50% 회복 또는 명상 게이지 +40"; },
     treasure: function () { return "보물·전술 둘 중 하나"; },
     event: function () { return "균열 주사위: 보물 또는 기습"; },
-    boss: function () { return "셀레스 · 서리 늑대"; },
+    meet: function (n) { return (n.who === "garen" ? "가렌" : n.who === "mariel" ? "마리엘" : "레오") + " · 데려가면 한 명이 쉰다"; },
   };
 
   // ---------- 저장 ----------
@@ -79,7 +79,7 @@
       track.appendChild(li);
     });
     var cur = R.current(run);
-    $("#map-line").textContent = run.floor === 0 ? "“" + R.ROOMS.gate.line + "” 문은 " + cur.length + "개. 하나만 열 수 있다." : "다음 문을 고르세요. HP는 이어집니다.";
+    $("#map-line").textContent = R.mapLine(run);
     var box = $("#choices"); box.innerHTML = "";
     cur.forEach(function (n, i) {
       var k = R.KIND[n.kind], room = R.ROOMS[n.room];
@@ -112,7 +112,8 @@
     var p = run.pending, k = R.KIND[node.kind], room = R.ROOMS[node.room];
     $("#node-floor").textContent = floorText();
     $("#node-kind").textContent = k.icon + " " + k.name + " · " + room.name;
-    $("#room-head").innerHTML = "<b>" + esc(room.name) + '</b><p>“' + esc(room.line) + "”</p>";
+    var line = node.kind === "elite" ? R.eliteLine(run) : room.line;
+    $("#room-head").innerHTML = "<b>" + esc(room.name) + '</b><p>“' + esc(line) + "”</p>";
     var body = $("#room-body"), acts = $("#room-actions");
     body.innerHTML = ""; acts.innerHTML = "";
     $("#scr-node").dataset.kind = node.kind;
@@ -128,6 +129,44 @@
     } else if (p.won) {
       body.innerHTML = '<p class="room-msg">' + esc(p.msg) + "</p>";
       acts.appendChild(btn("다음 층으로", "지도로 돌아갑니다", "primary big", nextFloor, "btn-next"));
+    } else if (node.kind === "meet") {
+      if (p.bench) {
+        body.innerHTML = '<p class="room-msg">누구를 우물에서 쉬게 할까. 셋은 그대로다.</p>';
+        run.active.forEach(function (id) {
+          acts.appendChild(btn(C.CAST[id].name + "을 쉬게 한다", "그 자리에 " + C.CAST[node.who].name + "이 선다", "", function () {
+            var msg = R.recruit(run, node.who, id);
+            if (!msg) return;
+            doneMsg(msg);
+          }, "bench-" + id));
+        });
+      } else {
+        var lines = R.meetScript(run, node.who);
+        body.innerHTML = lines.map(function (ln) {
+          return '<p class="room-msg"><b>' + esc(ln[0]) + '</b> ' + esc(ln[1]) + "</p>";
+        }).join("");
+        var full = run.recruited.length >= 2;
+        if (!full) acts.appendChild(btn("데려간다", "출전 중인 한 명을 쉬게 한다", "primary", function () {
+          p.bench = true; save(); showNode();
+        }, "btn-take"));
+        acts.appendChild(btn("남긴다", full ? "이 저택은 이름을 더 받지 않는다" : "이 층은 그냥 지나간다", "ghost", nextFloor, "btn-skip"));
+      }
+    } else if (node.kind === "rest" && p.swap) {
+      if (!p.pick) p.pick = run.active.slice();
+      body.innerHTML = '<p class="room-msg">출전은 셋. 쉬는 사람은 우물에 남는다.</p>';
+      run.roster.forEach(function (id) {
+        var on = p.pick.indexOf(id) >= 0;
+        acts.appendChild(btn((on ? "출전 · " : "쉼 · ") + C.CAST[id].name, on ? "누르면 쉰다" : "누르면 세운다", on ? "primary" : "", function () {
+          var i = p.pick.indexOf(id);
+          if (i >= 0) p.pick.splice(i, 1);
+          else if (p.pick.length < 3) p.pick.push(id);
+          save(); showNode();
+        }));
+      });
+      var ok3 = p.pick.length === 3;
+      acts.appendChild(btn("이 셋으로 둔다", ok3 ? "우물로 돌아간다" : "셋을 고르세요", ok3 ? "primary" : "", function () {
+        if (!R.setActive(run, p.pick)) return;
+        delete p.swap; delete p.pick; save(); showNode();
+      }, "btn-swap-ok"));
     } else if (node.kind === "rest") {
       body.innerHTML = '<p class="room-msg">우물물은 차갑다. 둘 중 하나만 할 시간이 있다.</p>';
       acts.appendChild(btn("우물 · 회복", "전원 최대 HP 50% 회복", "primary", function () {
@@ -137,6 +176,9 @@
       acts.appendChild(btn("명상 · 집중", "전원 필살 게이지 +" + R.REST.gauge, "", function () {
         R.addGauge(run, R.REST.gauge); doneMsg("숨을 고르며 다음 일격을 그렸다. 필살 게이지 +" + R.REST.gauge);
       }, "rest-gauge"));
+      if (run.roster.length > 3) acts.appendChild(btn("출전을 바꾼다", "쉬는 사람과 교대", "ghost", function () {
+        p.swap = true; save(); showNode();
+      }, "btn-swap"));
     } else if (node.kind === "treasure") {
       p.reward = R.boonOffer(run, run.seed * 31 + run.floor);
       p.msg = "룬 상자가 열렸다. 하나만 챙길 수 있다.";

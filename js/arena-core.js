@@ -14,6 +14,8 @@
   var ORIGINS = {
     ashen: { name: "잿빛 왕관", color: "#e4b547", tint: "#1b2a4a" },
     hunt: { name: "헌트 나우", color: "#7fd36b", tint: "#3a2412" },
+    deck: { name: "미녀 덱", color: "#d46b8c", tint: "#2a1420" },
+    rune: { name: "룬 영토", color: "#8fbf6a", tint: "#142414" },
   };
 
   // kind: hit | mark | heal | dawn | sanctum | crush
@@ -50,6 +52,37 @@
         ult: { name: "부위 분쇄", kind: "crush", pow: 2.4, markMul: 1.5,
           desc: "초강타 · 약점 ×1.5 · 충전 즉시 파괴", voice: "약점 확인… 분쇄!",
           fx: "crush", colors: ["#ffe2a8", "#f39a3c", "#3a2412"] },
+      },
+    },
+    garen: {
+      id: "garen", name: "가렌", title: "왕관의 방패", origin: "ashen", hp: 136, atk: 16,
+      color: "#c9d2df", img: "img/garen.webp",
+      actions: {
+        attack: { name: "방패 강타", kind: "hit", pow: 1.0, desc: "단일 피해" },
+        skill: { name: "밀어내기", kind: "hit", pow: 1.2, cd: 2, desc: "단일 강타 · 2턴" },
+        ult: { name: "방패의 맹세", kind: "dawn", pow: 1.4, buff: 1.2, turns: 2,
+          desc: "아군 공격 ×1.2(2턴) + 일격", voice: "폐하는 내가 막는다.",
+          fx: "dawn", colors: ["#e8eef5", "#c9d2df", "#1b2a4a"] },
+      },
+    },
+    mariel: {
+      id: "mariel", name: "마리엘", title: "덱의 독자", origin: "deck", hp: 98, atk: 16,
+      color: "#d46b8c", img: "img/mariel.webp",
+      actions: {
+        attack: { name: "카드 베기", kind: "hit", pow: 0.9, desc: "단일 피해" },
+        skill: { name: "패 읽기", kind: "mark", pow: 0.45, cd: 3, turns: 2, desc: "약점 표시 2턴 · 3턴" },
+        ult: { name: "결정타", kind: "hit", pow: 2.1, desc: "강타", voice: "이 패로 끝낸다.",
+          fx: "crush", colors: ["#ffd0de", "#d46b8c", "#2a1420"] },
+      },
+    },
+    leo: {
+      id: "leo", name: "레오", title: "룬의 서기", origin: "rune", hp: 110, atk: 19,
+      color: "#8fbf6a", img: "img/leo.webp",
+      actions: {
+        attack: { name: "룬 새김", kind: "hit", pow: 1.0, desc: "단일 피해" },
+        skill: { name: "각인", kind: "hit", pow: 1.45, cd: 2, desc: "단일 강타 · 2턴" },
+        ult: { name: "불칸의 한 획", kind: "hit", pow: 2.2, desc: "강타", voice: "이 칸은 이제 내 것이다.",
+          fx: "dawn", colors: ["#e4f5c8", "#8fbf6a", "#142414"] },
       },
     },
   };
@@ -102,7 +135,7 @@
       round: 1, wave: 0, phase: "player",
       waves: opts.waves && opts.waves.length ? opts.waves : WAVES,
       mods: opts.mods || {},
-      allies: PARTY.map(function (id) { return makeUnit(CAST[id], "ally"); }),
+      allies: ((opts.party && opts.party.length === 3 && opts.party.every(function (id) { return CAST[id]; })) ? opts.party : PARTY).map(function (id) { return makeUnit(CAST[id], "ally"); }),
       enemies: [], acted: {},
       stats: { maxHit: 0, ults: 0, breaks: 0, rounds: 0, dealt: 0 },
     };

@@ -242,6 +242,7 @@ img.px, .px img { image-rendering: pixelated; }
 .node.k-elite { border-color: #9b7bff; background: linear-gradient(180deg, #2a2145, var(--panel)); }
 .node.k-rest { border-color: rgba(63,214,143,.5); }
 .node.k-treasure { border-color: rgba(228,181,71,.6); }
+.node.k-meet { border-color: rgba(212,107,140,.55); }
 .node.k-event { border-color: rgba(143,208,255,.55); }
 .node.k-boss { border-color: var(--ice); background: linear-gradient(180deg, #16314a, var(--panel)); box-shadow: 0 0 18px rgba(143,208,255,.25); }
 .map-next { margin: 0; font-size: 13px; color: var(--muted); text-align: center; }
