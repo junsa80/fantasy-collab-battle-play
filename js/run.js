@@ -91,7 +91,7 @@
     document.body.dataset.stage = String(st.scene || st.no);
     if (SND) { if (st.bgm) SND.bgm(st.bgm); else SND.stopBgm(); }
   }
-  function leaveScene() { document.body.dataset.stage = ""; if (SND) SND.stopBgm(); }
+  function leaveScene() { document.body.dataset.stage = ""; if (SND) { SND.duck(false); SND.bgm("sfx/bgm-title.mp3"); } }
   function loadStages() {
     try { var o = JSON.parse(localStorage.getItem(R.STAGE_KEY) || "null"); if (o && o.v === 1) return o; } catch (e) {}
     return { v: 1, clears: {}, last: 1 };
@@ -348,6 +348,7 @@
       floorText: floorText(),
       bannerTitle: node.kind === "boss" ? "BOSS" : node.kind === "elite" ? "ELITE" : "BATTLE",
       onEnd: function (S) {
+        if (SND) SND.duck(false);
         var res = R.applyBattle(run, S, bnode);
         if (res === "lose" || res === "win") { save(); return result(); }
         var p = run.pending;
@@ -362,6 +363,7 @@
         save(); showNode();
       },
     });
+    if (SND) SND.duck(true);
     window.__fcbRun.battle = true;
   }
 

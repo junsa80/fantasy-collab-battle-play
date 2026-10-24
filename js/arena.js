@@ -401,6 +401,7 @@
       case "enemyUse":
         u = C.find(S, e.src);
         anim(cardOf(e.src), "elunge");
+        snd("skill");
         log((e.voice ? "<em>“" + esc(e.voice) + "”</em><br>" : "") + "<b>" + esc(u.name) + "</b> · " + esc(e.name));
         if (e.aoe) {
           screenFlash(u.id === "celes" ? "rgba(143,208,255,.55)" : "rgba(155,123,255,.5)");

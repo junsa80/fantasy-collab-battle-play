@@ -5,10 +5,11 @@
 (function (root) {
   "use strict";
   var KEY = "fcb-sfx";
-  var VOICES = { arin: 1, sera: 1, aria: 1, garen: 1, mariel: 1, leo: 1 };
+  var VOICES = { arin: 1, sera: 1, aria: 1, garen: 1, mariel: 1, leo: 1, serena: 1, odette: 1, noel: 1, lin: 1, arthur: 1, kael: 1 };
   var on = true;
   try { on = localStorage.getItem(KEY) !== "off"; } catch (e) {}
-  var cache = {}, music = null, want = null;
+  var cache = {}, music = null, want = null, ducked = false;
+  function vol() { return ducked ? 0.12 : 0.32; }
 
   function play(name, vol) {
     if (!on) return;
@@ -28,20 +29,21 @@
     try {
       if (!music || music.dataset.src !== want) {
         if (music) music.pause();
-        music = new Audio(want); music.dataset.src = want; music.loop = true; music.volume = 0.35;
+        music = new Audio(want); music.dataset.src = want; music.loop = true; music.volume = vol();
       }
       if (music.paused) { var p = music.play(); if (p && p.catch) p.catch(function () {}); }
     } catch (e) {}
   }
   function bgm(src) { want = src || null; if (!want) return stopBgm(); startMusic(); }
   function stopBgm() { want = null; if (music) { try { music.pause(); } catch (e) {} } }
+  function duck(v) { ducked = !!v; if (music) music.volume = vol(); }
   function setOn(v) {
     on = !!v;
     try { localStorage.setItem(KEY, on ? "on" : "off"); } catch (e) {}
     if (!on) { if (music) try { music.pause(); } catch (e) {} } else startMusic();
   }
   root.FCBSound = {
-    KEY: KEY, sfx: sfx, voice: voice, bgm: bgm, stopBgm: stopBgm, setOn: setOn,
+    KEY: KEY, sfx: sfx, voice: voice, bgm: bgm, stopBgm: stopBgm, duck: duck, setOn: setOn,
     get on() { return on; },
     get playing() { return !!(music && !music.paused); },
     get track() { return want; },

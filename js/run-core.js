@@ -349,7 +349,7 @@
   // 수치(SCALE·적 수치)는 스테이지마다 같다. 스테이지 2 적은 스테이지 1 짝과 같은 수치·AI (이슈 1 보류).
   var STAGES = {
     1: {
-      no: 1, name: "균열 저택", door: "잿빛 왕관 · 헌트 나우", boss: "셀레스", open: true, bgm: null, bg: null,
+      no: 1, name: "균열 저택", door: "잿빛 왕관 · 헌트 나우", boss: "셀레스", open: true, bgm: "sfx/bgm-stage1.mp3", bg: null,
       plan: FLOOR_PLAN, packs: PACKS, battleRooms: BATTLE_ROOMS, floorLine: FLOOR_LINE, meet: MEET,
       rooms: { elite: "watch", boss: "terrace", rest: "kitchen", treasure: "store", event: "banquet", first: "gate" },
       // 결과 한 줄은 docs/STORY.md "결과 (#res-line 만)" 그대로
