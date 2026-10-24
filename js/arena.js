@@ -1,6 +1,7 @@
 /* 환상 콜라보 — 균열 아레나 UI (DOM 턴제, 한 화면 터치)
    엔진: js/arena-core.js (FCBCore). 이 파일은 그리기·연출·입력만.
    개발용 해시: #seed=7  #fast  #ult(게이지 가득)  #autowin / #autolose(테스트용 HP 조정)
+   2026-10-24 런 맵: 전투는 js/run.js 가 start({ config, onEnd, floorText }) 로 연다. 결과는 onEnd(S) 로 넘긴다.
 */
 (function () {
   "use strict";
@@ -28,6 +29,7 @@
   var paused = false;
   var lastAct = 0;
   var gen = 0;            // 전투 세대: 재시작 시 이전 연출 중단
+  var ctx = null;         // 런 전투 문맥 { config, onEnd, floorText }
 
   function show(id) {
     $$(".screen").forEach(function (s) { s.classList.toggle("active", s.id === id); });
@@ -109,8 +111,8 @@
 
   function update() {
     if (!S) return;
-    $("#tb-wave").textContent = "웨이브 " + (S.wave + 1) + "/" + C.WAVES.length;
-    $("#tb-wname").textContent = C.WAVES[S.wave].name;
+    $("#tb-wave").textContent = ctx && ctx.floorText ? ctx.floorText : "웨이브 " + (S.wave + 1) + "/" + S.waves.length;
+    $("#tb-wname").textContent = S.waves[S.wave].name;
     $("#tb-round").textContent = "라운드 " + S.round;
     if (focus) { var f = C.find(S, focus); if (!f || !f.alive) focus = null; }
     if (!focus) { var dt = C.defaultTarget(S); focus = dt ? dt.uid : null; }
@@ -433,25 +435,29 @@
   }
 
   // ---------- 흐름 ----------
-  function start() {
+  function start(c) {
+    ctx = c && c.config ? c : null;
     var seed = hash.seed != null ? Number(hash.seed) : undefined;
     gen += 1;
     $("#fx").innerHTML = ""; $("#cutin").hidden = true; $("#banner").hidden = true;
-    S = C.create({ seed: seed });
+    var opts = ctx ? Object.assign({}, ctx.config) : {};
+    if (seed !== undefined) opts.seed = seed + (ctx && ctx.seedOffset || 0);
+    S = C.create(opts);
     if (hash.ult) S.allies.forEach(function (a) { a.gauge = 100; });
     if (hash.autowin) S.enemies.forEach(function (e) { e.hp = 1; });
     if (hash.autolose) S.allies.forEach(function (a) { a.hp = 1; });
     busy = false; paused = false; focus = null;
     buildEnemies(); buildAllies(); nextActive();
     show("scr-battle"); update();
-    log("<em>“" + esc(C.WAVES[0].line) + "”</em><br>적을 탭해 대상 · 아래 버튼으로 행동");
-    banner("WAVE 1", C.WAVES[0].name, 1400);
+    log("<em>“" + esc(S.waves[0].line) + "”</em><br>적을 탭해 대상 · 아래 버튼으로 행동");
+    banner(ctx ? (ctx.bannerTitle || "BATTLE") : "WAVE 1", S.waves[0].name, 1400);
     window.__fcb.state = S;
   }
 
   function finish() {
     busy = false;
     $("#fx").innerHTML = ""; $("#banner").hidden = true;
+    if (ctx && ctx.onEnd) { var cb = ctx.onEnd; return cb(S); }
     var win = S.phase === "win";
     var t = $("#res-title");
     t.textContent = win ? "승리!" : "패배…";
@@ -478,8 +484,7 @@
   }
 
   function init() {
-    $("#btn-start").addEventListener("click", start);
-    $("#btn-retry").addEventListener("click", start);
+    // 타이틀·결과·일시정지의 런 관련 버튼(#btn-start, #btn-retry, #btn-restart, #btn-quit)은 js/run.js 가 연결
     $("#btn-to-title").addEventListener("click", function () { show("scr-title"); });
     $("#btn-howto").addEventListener("click", function () {
       var h = $("#howto"); h.hidden = !h.hidden; this.setAttribute("aria-expanded", String(!h.hidden));
@@ -489,11 +494,15 @@
     $("#btn-fx2").addEventListener("click", toggle);
     $("#btn-pause").addEventListener("click", function () { paused = true; $("#pause").hidden = false; });
     $("#btn-resume").addEventListener("click", function () { paused = false; $("#pause").hidden = true; });
-    $("#btn-restart").addEventListener("click", function () { $("#pause").hidden = true; start(); });
-    $("#btn-quit").addEventListener("click", function () { gen += 1; paused = false; $("#pause").hidden = true; S = null; show("scr-title"); });
     $$(".abtn").forEach(function (b) { b.addEventListener("click", function () { onAction(b.dataset.key); }); });
     setFx(settings.fx, true);
-    window.__fcb = { core: C, state: null, start: start, settings: settings };
+    window.__fcb = {
+      core: C, state: null, start: start, settings: settings, show: show, banner: banner, esc: esc, hash: hash,
+      setFx: setFx, fxLabel: fxLabel, vibrate: vibrate,
+      // 전투 중단(일시정지 → 타이틀/새 런): 진행 중 연출 체인을 끊는다
+      abort: function () { gen += 1; paused = false; busy = false; ctx = null; S = null; $("#pause").hidden = true; $("#cutin").hidden = true; $("#banner").hidden = true; $("#fx").innerHTML = ""; },
+      inBattle: function () { return !!S && $("#scr-battle").classList.contains("active"); },
+    };
   }
   init();
 })();

@@ -4,6 +4,9 @@
    수치는 CAST / ENEMY / GAUGE 에만. 밸런스: node tools/sim.js (필살·스킬 쓰면 승, 기본기만이면 패)
    2026-10-24 1패스: 적 atk 병사24 장군30 늑대24 셀레스33, hp 장군260 셀레스320, 게이지 15/12/20.
    결과 이벤트는 UI가 순서대로 재생한다.
+   2026-10-24 런 맵: create({ waves, carry, mods }) 로 방 하나짜리 전투를 만든다(js/run-core.js).
+     waves 없으면 기존 2웨이브 아레나. carry = { arin:{hp,gauge}, ... } 이전 전투의 HP·게이지 이어받기.
+     mods.rally = 공격·스킬 뒤 다른 아군 게이지 +N, mods.guardPlus = 방어 게이지 +N (보물·전술. 피해 공식은 그대로)
 */
 (function (root) {
   "use strict";
@@ -97,10 +100,20 @@
     var s = {
       rand: mulberry32(opts.seed != null ? opts.seed : (Date.now() & 0xffffffff)),
       round: 1, wave: 0, phase: "player",
+      waves: opts.waves && opts.waves.length ? opts.waves : WAVES,
+      mods: opts.mods || {},
       allies: PARTY.map(function (id) { return makeUnit(CAST[id], "ally"); }),
       enemies: [], acted: {},
       stats: { maxHit: 0, ults: 0, breaks: 0, rounds: 0, dealt: 0 },
     };
+    if (opts.carry) {
+      s.allies.forEach(function (u) {
+        var c = opts.carry[u.id]; if (!c) return;
+        if (c.hp != null) u.hp = Math.max(0, Math.min(u.maxHp, Math.round(c.hp)));
+        if (u.hp <= 0) { u.hp = 0; u.alive = false; }
+        if (c.gauge != null) u.gauge = Math.max(0, Math.min(100, Math.round(c.gauge)));
+      });
+    }
     loadWave(s, 0);
     planIntents(s);
     return s;
@@ -108,7 +121,14 @@
 
   function loadWave(s, i) {
     s.wave = i;
-    s.enemies = WAVES[i].enemies.map(function (id) { return makeUnit(ENEMY[id], "enemy"); });
+    var w = s.waves[i];
+    s.enemies = w.enemies.map(function (id) {
+      var u = makeUnit(ENEMY[id], "enemy");
+      // 런 층 보정(웨이브 옵션 hpMul/atkMul). 기본 ENEMY 수치·피해 공식은 그대로
+      if (w.hpMul) { u.maxHp = u.hp = Math.round(u.maxHp * w.hpMul); }
+      if (w.atkMul) u.atk = Math.round(u.atk * w.atkMul);
+      return u;
+    });
   }
 
   function living(list) { return list.filter(function (u) { return u.alive; }); }
@@ -197,7 +217,7 @@
     if (!target || !target.alive || target.side !== "enemy") target = defaultTarget(s);
     if (key === "guard") {
       u.guard = true;
-      u.gauge = Math.min(100, u.gauge + GAUGE.guard);
+      u.gauge = Math.min(100, u.gauge + GAUGE.guard + (s.mods.guardPlus || 0));
       ev.push({ type: "guard", dst: u.uid });
     } else {
       var a = CAST[u.id].actions[key];
@@ -206,6 +226,7 @@
         ev.push({ type: "cutin", src: u.uid, unit: u.id, name: a.name, voice: a.voice, fx: a.fx, colors: a.colors, origin: ORIGINS[CAST[u.id].origin].name });
       } else {
         u.gauge = Math.min(100, u.gauge + (key === "attack" ? GAUGE.attack : GAUGE.skill));
+        if (s.mods.rally) living(s.allies).forEach(function (m) { if (m !== u) m.gauge = Math.min(100, m.gauge + s.mods.rally); });
       }
       if (key === "skill") u.cd = a.cd;
       ev.push({ type: "use", src: u.uid, key: key, name: a.name });
@@ -254,13 +275,13 @@
     var ev = [];
     if (!living(s.allies).length) { s.phase = "lose"; ev.push({ type: "lose" }); return ev; }
     if (!living(s.enemies).length) {
-      if (s.wave + 1 < WAVES.length) {
+      if (s.wave + 1 < s.waves.length) {
         loadWave(s, s.wave + 1);
         living(s.allies).forEach(function (a) { a.gauge = Math.min(100, a.gauge + GAUGE.wave); });
         s.acted = {};
         living(s.allies).forEach(function (a) { a.guard = false; });
         planIntents(s);
-        ev.push({ type: "wave", wave: s.wave, name: WAVES[s.wave].name, line: WAVES[s.wave].line });
+        ev.push({ type: "wave", wave: s.wave, name: s.waves[s.wave].name, line: s.waves[s.wave].line });
       } else {
         s.phase = "win"; ev.push({ type: "win" });
       }

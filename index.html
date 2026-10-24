@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#0b0f18" />
   <meta name="mobile-web-app-capable" content="yes" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22%3E%3Cpath d=%22M8 44 L16 18 L26 34 L32 12 L38 34 L48 18 L56 44 Z%22 fill=%22%23e4b547%22/%3E%3Crect x=%228%22 y=%2246%22 width=%2248%22 height=%228%22 fill=%22%238fd0ff%22/%3E%3C/svg%3E" />
-  <title>환상 콜라보 — 균열 아레나</title>
+  <title>환상 콜라보 — 균열 저택</title>
   <link rel="stylesheet" href="css/arena.css" />
 </head>
 <body>
@@ -27,27 +27,56 @@
       <div class="logo">
         <span class="logo-kicker">CROSSOVER BATTLE</span>
         <h1>환상 콜라보</h1>
-        <p class="logo-sub">균열 아레나</p>
+        <p class="logo-sub">균열 저택</p>
       </div>
       <div class="chips">
         <span class="chip ashen">잿빛 왕관 · 아린 · 세라</span>
         <span class="chip hunt">헌트 나우 · 아리아</span>
       </div>
       <div class="title-actions">
-        <button type="button" class="btn primary big" id="btn-start">전투 시작</button>
+        <button type="button" class="btn primary big" id="btn-continue" hidden>이어하기<small id="continue-sub"></small></button>
+        <button type="button" class="btn primary big" id="btn-start">런 시작<small id="start-sub">6층 · 방을 골라 보스 셀레스까지</small></button>
         <div class="sub-row">
           <button type="button" class="btn ghost" id="btn-howto" aria-expanded="false">조작법</button>
           <button type="button" class="btn ghost" id="btn-fx">연출: 보통</button>
         </div>
         <div class="howto" id="howto" hidden>
           <ol>
-            <li>위쪽 <b>적을 탭</b>하면 집중 대상이 바뀝니다.</li>
+            <li><b>방을 고르세요.</b> ⚔️ 전투 · ☠️ 강적 · ⛲ 휴식 · 🎁 보물 · 🎲 균열. 6층 👑 보스를 쓰러뜨리면 승리.</li>
+            <li>HP는 다음 방으로 이어집니다. 쓰러진 아군은 전투 뒤 조금 회복해 일어나요.</li>
+            <li>전투: 위쪽 <b>적을 탭</b>하면 집중 대상이 바뀝니다.</li>
             <li>아래 버튼으로 <b>공격 · 스킬 · 방어 · 필살기</b> 중 하나를 고르세요. 아군 3명이 행동하면 적 차례입니다.</li>
             <li>적 카드 아래 <b>예고</b>를 보세요. ⚠ 충전 중인 적은 피해를 모으면 <b>브레이크</b>로 끊을 수 있어요.</li>
             <li>게이지가 차면 <b>필살기</b>. 「부위 분쇄」는 충전을 바로 부숩니다.</li>
           </ol>
         </div>
       </div>
+    </section>
+
+    <!-- 런 지도 (방 선택) -->
+    <section id="scr-map" class="screen" aria-label="방 선택">
+      <header class="topbar">
+        <div class="tb-wave"><b id="map-floor">1층 / 6층</b><span id="map-sub">균열 저택 · 다음 방을 고르세요</span></div>
+        <div class="tb-round" id="map-boons">전술 없음</div>
+        <button type="button" class="btn icon" id="btn-map-menu" aria-label="메뉴">Ⅱ</button>
+      </header>
+      <ol class="track" id="track" aria-label="진행"></ol>
+      <p class="map-line" id="map-line"></p>
+      <div class="choices" id="choices"></div>
+      <p class="map-next" id="map-next"></p>
+      <div class="party" id="map-party"></div>
+    </section>
+
+    <!-- 조우 (방 안) -->
+    <section id="scr-node" class="screen" aria-label="조우">
+      <header class="topbar">
+        <div class="tb-wave"><b id="node-floor">1층 / 6층</b><span id="node-kind">전투</span></div>
+        <button type="button" class="btn icon" id="btn-node-menu" aria-label="메뉴">Ⅱ</button>
+      </header>
+      <div class="room-head" id="room-head"></div>
+      <div class="room-body" id="room-body"></div>
+      <div class="room-actions" id="room-actions"></div>
+      <div class="party" id="node-party"></div>
     </section>
 
     <!-- 전투 -->
@@ -80,7 +109,7 @@
         <div class="res-stats" id="res-stats"></div>
         <p class="res-tip" id="res-tip"></p>
         <div class="res-actions">
-          <button type="button" class="btn primary big" id="btn-retry">다시 도전</button>
+          <button type="button" class="btn primary big" id="btn-retry">새 런 도전</button>
           <button type="button" class="btn" id="btn-to-title">타이틀로</button>
         </div>
       </div>
@@ -104,13 +133,15 @@
       <div class="modal-box">
         <div class="modal-title">일시정지</div>
         <button type="button" class="btn primary big" id="btn-resume">계속</button>
-        <button type="button" class="btn" id="btn-restart">처음부터 다시</button>
+        <button type="button" class="btn" id="btn-restart">새 런 시작</button>
         <button type="button" class="btn" id="btn-fx2">연출: 보통</button>
-        <button type="button" class="btn" id="btn-quit">타이틀로</button>
+        <button type="button" class="btn" id="btn-quit">타이틀로 <small>(방 앞에서 이어하기)</small></button>
       </div>
     </div>
   </div>
   <script src="js/arena-core.js"></script>
   <script src="js/arena.js"></script>
+  <script src="js/run-core.js"></script>
+  <script src="js/run.js"></script>
 </body>
 </html>
