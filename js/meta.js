@@ -141,7 +141,8 @@
   // 런 경험치: 지난 층 × 10 + 승리 20, 하드 ×1.5. 명단 전부, 명단 밖 해금 동료 30%
   function runXp(run) {
     var win = run.over === "win";
-    var floors = win ? 6 : Math.max(0, Math.min(6, run.floor | 0));
+    var nf = run.quest && run.map ? run.map.length : 6;   // 의뢰 던전(docs/QUESTS.md)은 4층
+    var floors = win ? nf : Math.max(0, Math.min(nf, run.floor | 0));
     var x = floors * XP.floor + (win ? XP.win : 0) + (run.bonusXp || 0);
     if (run.diff === "hard") x = Math.round(x * XP.hard);
     return x;

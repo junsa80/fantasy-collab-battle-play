@@ -123,6 +123,19 @@
       </div>
     </section>
 
+    <!-- 동료 의뢰 (docs/QUESTS.md) -->
+    <section id="scr-quest" class="screen" aria-label="동료 의뢰">
+      <header class="topbar">
+        <div class="tb-wave"><b>📜 동료 의뢰</b><span id="quest-sub">동료가 단서를 준다</span></div>
+      </header>
+      <div class="quest-list" id="quest-list"></div>
+      <div class="quest-detail" id="quest-detail" hidden>
+        <div class="quest-body" id="quest-body"></div>
+        <div class="quest-acts" id="quest-acts"></div>
+      </div>
+      <button type="button" class="btn ghost" id="btn-quest-back">타이틀로</button>
+    </section>
+
     <section id="scr-result" class="screen" aria-label="결과">
       <div class="result-box">
         <img id="res-img" class="res-img" src="img/arin.png" alt="" />
@@ -168,6 +181,7 @@
   <script src="js/arena.js"></script>
   <script src="js/run-core.js"></script>
   <script src="js/meta.js"></script>
+  <script src="js/quest.js"></script>
   <script src="js/run.js"></script>
 </body>
 </html>

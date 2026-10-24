@@ -490,7 +490,15 @@
       winImg: "img/arin.png", loseImg: "img/ar.webp",
     },
   };
-  function stageOf(run) { return STAGES[(run && run.stage) || 1] || STAGES[1]; }
+  // 동료 의뢰 던전 (js/quest.js 가 등록. docs/QUESTS.md). 본편 STAGES 와 따로 → run-sim 기본 목록에 안 들어간다
+  var QUESTS = {};
+  function addQuest(q) { QUESTS[q.id] = q; }
+  function stageOf(run) {
+    if (run && run.quest && QUESTS[run.quest]) return QUESTS[run.quest];
+    return STAGES[(run && run.stage) || 1] || STAGES[1];
+  }
+  // 층 수: 본편 6, 의뢰 던전은 그 지도 길이
+  function floorsOf(run) { return run && run.quest && run.map ? run.map.length : FLOORS; }
   function openStages() { return Object.keys(STAGES).map(Number).filter(function (n) { return STAGES[n].open; }); }
   // 받침에 맞는 조사 (이/가, 은/는)
   function josa(name, a, b) {
@@ -510,6 +518,9 @@
     arrow: { name: "유물 · 사냥 화살촉", text: "기본 공격 피해 +15%", mod: true, relic: "hunt" },
     queen: { name: "유물 · 여왕의 카드", text: "필살기를 쓰면 다른 아군 필살 게이지 +10", mod: true, relic: "deck" },
     healrune: { name: "유물 · 치유 룬", text: "전투에서 이기면 전원 최대 HP 10% 회복", mod: true, relic: "rune" },
+    // 의뢰 보상 유물 (docs/QUESTS.md): 그 의뢰를 끝내면 보물 고르기에 섞인다. 새 저장에는 안 나온다
+    lastcard: { name: "유물 · 마지막 패", text: "강적·보스 전투 시작 때 전원 필살 게이지 +25", mod: true, relic: "quest" },
+    seal: { name: "유물 · 하르트만 인장", text: "이기면 전원 HP 8% 회복 · 쓰러진 아군은 40%로", mod: true, relic: "quest" },
   };
   // 강적 변종: 스테이지를 한 번 깨면 3층 강적 자리에 (수치·AI 같음)
   var VARIANT = {
@@ -566,7 +577,8 @@
   // party: 출전 고르기에서 고른 셋 (없으면 시작 셋 = 지금과 같다)
   function newRun(seed, stage, diff, party, growth, extra) {
     if (seed == null) seed = (Date.now() & 0x7fffffff);
-    var st = STAGES[stage] && STAGES[stage].plan ? STAGES[stage] : STAGES[1];
+    var qd = typeof stage === "string" && QUESTS[stage] ? QUESTS[stage] : null;
+    var st = qd || (STAGES[stage] && STAGES[stage].plan ? STAGES[stage] : STAGES[1]);
     var r = rng(seed);
     var map = st.plan.map(function (f) {
       var used = [];
@@ -580,17 +592,18 @@
     var g = growth || null;
     active.forEach(function (id) { party[id] = { hp: g && g[id] ? g[id].hp : C.CAST[id].hp, gauge: 0 }; });
     var run = {
-      v: 2, stage: st.no, diff: diff === "hard" ? "hard" : "normal", seed: seed, floor: 0, map: map, path: [], party: party,
+      v: 2, stage: qd ? qd.scene : st.no, diff: diff === "hard" ? "hard" : "normal", seed: seed, floor: 0, map: map, path: [], party: party,
       active: active, roster: active.slice(), recruited: [], start: active.slice(),
       boons: [], over: null,
       stats: { battles: 0, rounds: 0, maxHit: 0, ults: 0, breaks: 0 },
     };
     // 성장 값(Lv2 이상·갈림길)이 있을 때만. 새 저장은 키 자체가 없다
     if (g) run.growth = g;
+    if (qd) run.quest = qd.id;
     // ③ 컨텐츠 (meta 가 있을 때만): 유물 후보 · 3층 강적 변종 · 균열 거울
     if (extra) {
       if (extra.relics && extra.relics.length) run.relicPool = extra.relics.filter(function (id) { return BOONS[id] && BOONS[id].relic; });
-      if (extra.variant && VARIANT[st.no]) {
+      if (extra.variant && !qd && VARIANT[st.no]) {
         map[2].forEach(function (n) {
           if (n.kind !== "elite") return;
           n.pack = n.pack.map(function (id) { return C.ENEMY[id].boss ? VARIANT[st.no].id : id; });
@@ -651,6 +664,11 @@
     // 동료 조합 (docs/SYNERGY.md): 켜진 게 있을 때만 키가 생긴다 (시작 셋 = 없음)
     var syn = C.synergyOf(ids);
     if (syn.length) cfg.syn = syn;
+    // 의뢰 유물 「마지막 패」: 강적·보스 전투 시작 게이지 +25 (가진 때만)
+    if (run.boons.indexOf("lastcard") >= 0 && (node.kind === "elite" || node.kind === "boss")) {
+      var sg = {}; ids.forEach(function (id) { sg[id] = (cfg.mods.startGauge && cfg.mods.startGauge[id] || 0) + 25; });
+      cfg.mods.startGauge = sg;
+    }
     return cfg;
   }
 
@@ -662,13 +680,15 @@
     run.stats.breaks += s.stats.breaks;
     run.stats.maxHit = Math.max(run.stats.maxHit, s.stats.maxHit);
     if (s.phase !== "win") { run.over = "lose"; return "lose"; }
+    var seal = run.boons.indexOf("seal") >= 0;
     s.allies.forEach(function (u) {
-      var hp = u.alive ? u.hp : Math.round(u.maxHp * AFTER.reviveHp);
+      var hp = u.alive ? u.hp : Math.round(u.maxHp * (seal ? 0.4 : AFTER.reviveHp));
       run.party[u.id] = { hp: Math.max(1, hp), gauge: u.alive ? Math.round(u.gauge * AFTER.keepGauge) : 0 };
     });
     if (node.variant) run.bonusXp = (run.bonusXp || 0) + VARIANT_XP;
     if (node.kind === "boss") { run.over = "win"; return "win"; }
     if (run.boons.indexOf("healrune") >= 0) healAll(run, 0.1);
+    if (seal) healAll(run, 0.08);
     return "next";
   }
 
@@ -716,7 +736,7 @@
   }
   function advance(run) {
     run.floor += 1;
-    if (run.floor >= FLOORS) run.over = run.over || "win";
+    if (run.floor >= floorsOf(run)) run.over = run.over || "win";
   }
 
   function partySummary(run) {
@@ -781,13 +801,15 @@
   }
 
   function validRun(o) {
-    return !!(o && o.v === 2 && (o.stage == null || (STAGES[o.stage] && STAGES[o.stage].open)) && Array.isArray(o.map) && o.map.length === FLOORS && o.party && Array.isArray(o.active) && o.active.length === 3 && typeof o.floor === "number" && !o.over);
+    var qd = o && o.quest ? QUESTS[o.quest] : null;
+    if (o && o.quest && !qd) return false;
+    return !!(o && o.v === 2 && (o.stage == null || (STAGES[o.stage] && STAGES[o.stage].open)) && Array.isArray(o.map) && o.map.length === (qd ? qd.plan.length : FLOORS) && o.party && Array.isArray(o.active) && o.active.length === 3 && typeof o.floor === "number" && !o.over);
   }
 
   var api = {
     SAVE_KEY: SAVE_KEY, FLOORS: FLOORS, ROOMS: ROOMS, KIND: KIND, PACKS: PACKS, FLOOR_PLAN: FLOOR_PLAN,
     SCALE: SCALE, DIFF: DIFF, DIFF_KEY: DIFF_KEY, diffOf: diffOf, enemyScale: enemyScale, BOONS: BOONS, REST: REST, AFTER: AFTER, EVENT: EVENT,
-    STAGES: STAGES, stageOf: stageOf, openStages: openStages, josa: josa, STAGE_KEY: "fcb-stages-v1",
+    STAGES: STAGES, stageOf: stageOf, QUESTS: QUESTS, addQuest: addQuest, floorsOf: floorsOf, openStages: openStages, josa: josa, STAGE_KEY: "fcb-stages-v1",
     newRun: newRun, current: current, battleConfig: battleConfig, applyBattle: applyBattle,
     healAll: healAll, addGauge: addGauge, gainBoon: gainBoon, boonOffer: boonOffer, rollEvent: rollEvent,
     choose: choose, advance: advance, maxHp: maxHp, VARIANT: VARIANT, VARIANT_XP: VARIANT_XP, partySummary: partySummary, validRun: validRun, mods: mods, meetScript: meetScript, meetKnown: meetKnown, recruit: recruit, setActive: setActive, mapLine: mapLine, eliteLine: eliteLine,

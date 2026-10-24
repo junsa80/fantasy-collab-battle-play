@@ -5,7 +5,7 @@
 */
 (function () {
   "use strict";
-  var C = window.FCBCore, R = window.FCBRun, A = window.__fcb, SND = window.FCBSound, M = window.FCBMeta;
+  var C = window.FCBCore, R = window.FCBRun, A = window.__fcb, SND = window.FCBSound, M = window.FCBMeta, Q = window.FCBQuest;
   var $ = function (s, el) { return (el || document).querySelector(s); };
   var esc = A.esc;
   var run = null;
@@ -57,7 +57,7 @@
   }
 
   // ---------- 공통 ----------
-  function floorText() { return (Math.min(run.floor, R.FLOORS - 1) + 1) + "층 / " + R.FLOORS + "층" + (R.diffOf(run) === "hard" ? " · 하드" : ""); }
+  function floorText() { var F = R.floorsOf(run); return (Math.min(run.floor, F - 1) + 1) + "층 / " + F + "층" + (R.diffOf(run) === "hard" ? " · 하드" : ""); }
   // 난이도 선택 (타이틀). 기본 보통. 기록 키 fcb-diff-v1
   function loadDiff() { try { return localStorage.getItem(R.DIFF_KEY) === "hard" ? "hard" : "normal"; } catch (e) { return "normal"; } }
   function saveDiff(d) { try { localStorage.setItem(R.DIFF_KEY, d); } catch (e) {} }
@@ -88,7 +88,7 @@
   function stage() { return R.stageOf(run); }
   function stageScene() {
     var st = stage();
-    document.body.dataset.stage = String(st.no);
+    document.body.dataset.stage = String(st.scene || st.no);
     if (SND) { if (st.bgm) SND.bgm(st.bgm); else SND.stopBgm(); }
   }
   function leaveScene() { document.body.dataset.stage = ""; if (SND) SND.stopBgm(); }
@@ -109,6 +109,9 @@
     return m;
   }
   function saveMeta(m) { try { localStorage.setItem(M.KEY, JSON.stringify(m)); } catch (e) {} }
+  // 동료 의뢰 진행 (fcb-quest-v1, docs/QUESTS.md). 바뀔 때마다 바로 저장
+  function loadQuest() { try { return Q.normalize(JSON.parse(localStorage.getItem(Q.KEY) || "null")); } catch (e) { return Q.fresh(); } }
+  function saveQuest(qs) { try { localStorage.setItem(Q.KEY, JSON.stringify(qs)); } catch (e) {} }
 
   // ---------- 지도 ----------
   function showMap() {
@@ -297,6 +300,11 @@
       fightPack = node.pack; scale = node.tier;
     }
 
+    if (fightPack && node.kind === "boss" && run.quest) {
+      body.innerHTML = Q.bossTalk(run.quest, run.active).map(function (ln) {
+        return '<p class="room-msg talk"><b>' + esc(ln[0]) + "</b> " + esc(ln[1]) + "</p>";
+      }).join("");
+    }
     if (fightPack) {
       var sc = R.enemyScale(run, scale);
       var foes = document.createElement("div"); foes.className = "foes";
@@ -307,7 +315,7 @@
       }).join("");
       body.appendChild(foes);
       var tip = document.createElement("p"); tip.className = "room-rule";
-      tip.textContent = node.kind === "boss" ? "결전. 이기면 균열이 닫힌다." : node.kind === "elite" ? (node.variant ? "변종 강적. 이기면 전술·보물 + 명단 경험치 +" + R.VARIANT_XP + "." : "강적. 이기면 전술·보물을 고른다.") : "적 카드 아래 예고를 보고 싸우세요.";
+      tip.textContent = node.kind === "boss" ? (run.quest ? "결전. 이기면 의뢰 완료 · 보상은 처음 한 번." : "결전. 이기면 균열이 닫힌다.") : node.kind === "elite" ? (node.variant ? "변종 강적. 이기면 전술·보물 + 명단 경험치 +" + R.VARIANT_XP + "." : "강적. 이기면 전술·보물을 고른다.") : "적 카드 아래 예고를 보고 싸우세요.";
       body.appendChild(tip);
       acts.appendChild(btn(node.kind === "boss" ? "결전에 나선다" : "싸운다", "도망칠 수 없다", "primary big", function () {
         fight(node, fightPack, scale);
@@ -362,14 +370,20 @@
     leaveScene();
     if (SND) SND.sfx(win ? "win" : "lose");
     var hard = R.diffOf(run) === "hard";
-    if (win) {
+    var qres = null;
+    if (win && run.quest && !run.awarded) {
+      var qs = loadQuest(), mq = loadMeta();
+      qres = Q.complete(qs, mq, run.quest, hard);
+      saveQuest(qs); saveMeta(mq);
+      run.questRes = qres;
+    } else if (win && !run.quest) {
       var rec = loadStages();
       if (hard) { rec.hard = rec.hard || {}; rec.hard[sg.no] = (rec.hard[sg.no] || 0) + 1; }
       else rec.clears[sg.no] = (rec.clears[sg.no] || 0) + 1;
       saveStages(rec);
     }
     var t = $("#res-title");
-    t.textContent = (win ? (sg.no === 1 ? "균열 봉인!" : sg.name + " 돌파!") : "패배…") + (hard ? " · 하드" : "");
+    t.textContent = (win ? (run.quest ? "「" + sg.name + "」 완료!" : sg.no === 1 ? "균열 봉인!" : sg.name + " 돌파!") : "패배…") + (hard ? " · 하드" : "");
     t.className = "res-title " + (win ? "win" : "lose");
     var img = $("#res-img");
     img.src = win ? sg.winImg : sg.loseImg;
@@ -377,13 +391,15 @@
     img.style.borderColor = win ? "var(--gold)" : "var(--ice)";
     $("#res-line").textContent = win ? sg.win : sg.lose;
     $("#res-stats").innerHTML =
-      "<div><b>" + (Math.min(run.floor, R.FLOORS - 1) + 1) + "</b>도달 층</div>" +
+      "<div><b>" + (Math.min(run.floor, R.floorsOf(run) - 1) + 1) + "</b>도달 층</div>" +
       "<div><b>" + st.battles + "</b>전투</div>" +
       "<div><b>" + st.ults + "</b>필살기</div>" +
       "<div><b>" + st.breaks + "</b>브레이크</div>";
     $("#res-tip").textContent = win
-      ? "최대 피해 " + st.maxHit + " · 총 " + st.rounds + "라운드. 강적 방을 더 들러 보세요."
-      : (Math.min(run.floor, R.FLOORS - 1) + 1) + "층에서 쓰러졌어요. 팁: 보스 전엔 ⛲ 휴식, ⚠ 충전은 「부위 분쇄」로 끊기.";
+      ? (run.quest ? questRewardText(run.questRes) : "최대 피해 " + st.maxHit + " · 총 " + st.rounds + "라운드. 강적 방을 더 들러 보세요.")
+      : (Math.min(run.floor, R.floorsOf(run) - 1) + 1) + "층에서 쓰러졌어요. 팁: 보스 전엔 ⛲ 휴식, ⚠ 충전은 「부위 분쇄」로 끊기.";
+    $("#res-tip").classList.toggle("quest-reward", !!(win && run.quest));
+    $("#btn-retry").textContent = run.quest ? "의뢰 다시 도전" : "새 런 도전";
     run.over = run.over || "lose";
     // 성장: 런마다 한 번 (져도). 새 저장도 경험치는 쌓인다
     if (!run.awarded) {
@@ -396,6 +412,16 @@
     renderGrow();
     updateTitle();
     A.show("scr-result");
+  }
+  // 의뢰 보상 한 줄 (결과 화면)
+  function questRewardText(r) {
+    if (!r) return "의뢰 완료.";
+    if (!r.first) return "다시 끝냈다. 보상은 처음 한 번만 · 이야기는 의뢰 목록에서.";
+    var parts = r.xp.map(function (x) { return C.CAST[x.id].name + " 경험치 +" + x.gain + (x.up ? " (Lv" + x.to.lv + "!)" : ""); });
+    parts.push("이야기 「" + Q.QUESTS[run.quest].chapter.title + "」");
+    if (r.relic) parts.push(R.BOONS[r.relic].name + " — 보물 고르기에 섞인다");
+    if (r.next) parts.push("새 단서: 「" + Q.QUESTS[r.next].name + "」");
+    return "🎁 보상 · " + parts.join(" · ");
   }
   function fmtAtk(v) { return (Math.round(v * 10) / 10).toFixed(1).replace(/\.0$/, ""); }
   function face(id) { var c = C.CAST[id]; return '<img class="' + (c.pixel ? "px" : "") + '" src="' + c.img + '" alt="" />'; }
@@ -451,7 +477,7 @@
     var sv = loadSave();
     var c = $("#btn-continue");
     c.hidden = !sv;
-    if (sv) $("#continue-sub").textContent = R.stageOf(sv).name + (R.diffOf(sv) === "hard" ? " · 하드" : "") + " · " + (Math.min(sv.floor, R.FLOORS - 1) + 1) + "층 · " + R.partySummary(sv).map(function (p) { return p.name + " " + p.hp; }).join(" · ");
+    if (sv) $("#continue-sub").textContent = (sv.quest ? "📜 " : "") + R.stageOf(sv).name + (R.diffOf(sv) === "hard" ? " · 하드" : "") + " · " + (Math.min(sv.floor, R.floorsOf(sv) - 1) + 1) + "층 · " + R.partySummary(sv).map(function (p) { return p.name + " " + p.hp; }).join(" · ");
     var rec = loadStages();
     var list = $("#stage-list"); list.innerHTML = "";
     var shut = [];
@@ -464,6 +490,12 @@
       list.appendChild(b);
     });
     $("#stage-shut").textContent = shut.length ? shut.join(" · ") + " — 준비 중" : "";
+    // 동료 의뢰 (docs/QUESTS.md): 목록 맨 끝 칸
+    var qs = loadQuest(), mq = loadMeta(), leads = Q.newLeads(qs, mq).length, prog = Q.progress(qs);
+    var qsub = leads ? "✦ 새 단서 " + leads + " · 클리어 " + prog + "/" + Q.LIST.length
+      : Q.LIST.some(function (id) { return Q.state(qs, mq, id) !== "locked"; }) ? "클리어 " + prog + "/" + Q.LIST.length : "동료를 영입하면 단서가 열린다";
+    var qb = btn("📜 동료 의뢰", qsub, "stage quest" + (leads ? " new" : ""), showQuests, "btn-quests");
+    list.appendChild(qb);
     var d = loadDiff();
     $("#btn-diff-normal").setAttribute("aria-pressed", d === "normal" ? "true" : "false");
     $("#btn-diff-hard").setAttribute("aria-pressed", d === "hard" ? "true" : "false");
@@ -477,11 +509,20 @@
     pick = { stage: n, ids: M.defaultParty(m), look: null };
     showParty();
   }
+  // 의뢰 출발: 필수 동료를 먼저 세우고 나머지는 늘 쓰던 셋에서 채운다
+  function startQuest(id) {
+    var m = loadMeta(), need = Q.QUESTS[id].need;
+    var ids = need.slice();
+    M.defaultParty(m).concat(m.unlocked).forEach(function (x) { if (ids.length < 3 && ids.indexOf(x) < 0) ids.push(x); });
+    pick = { stage: 0, quest: id, ids: ids, look: need[0] };
+    showParty();
+  }
   function showParty() {
     leaveScene();
-    var m = loadMeta(), st = R.STAGES[pick.stage];
-    $("#party-stage").textContent = pick.stage + " · " + st.name + (loadDiff() === "hard" ? " · 하드" : "");
-    $("#party-sub").textContent = "출전 셋 · " + pick.ids.length + "/3 · 해금 " + m.unlocked.length + "명";
+    var m = loadMeta(), qd = pick.quest ? Q.QUESTS[pick.quest] : null, st = qd || R.STAGES[pick.stage];
+    $("#party-stage").textContent = (qd ? "📜 의뢰 · " + st.name : pick.stage + " · " + st.name) + (loadDiff() === "hard" ? " · 하드" : "");
+    $("#party-sub").textContent = qd ? "필수 " + qd.need.map(function (w) { return C.CAST[w].name; }).join("·") + " · " + pick.ids.length + "/3"
+      : "출전 셋 · " + pick.ids.length + "/3 · 해금 " + m.unlocked.length + "명";
     var grid = $("#party-grid"); grid.innerHTML = "";
     m.unlocked.forEach(function (id) {
       var cd = C.CAST[id], i = pick.ids.indexOf(id);
@@ -492,8 +533,10 @@
       b.innerHTML = (i >= 0 ? '<span class="ord">' + (i + 1) + "</span>" : "") +
         '<img class="' + (cd.pixel ? "px" : "") + '" src="' + cd.img + '" alt="" /><b>' + esc(cd.name) + "</b><small>" + esc(C.ORIGINS[cd.origin].name) + "</small>" +
         '<span class="lv' + (M.pending(m, id).length ? " new" : "") + '">Lv' + M.level(m, id) + (M.pending(m, id).length ? "!" : "") + "</span>";
+      if (qd && qd.need.indexOf(id) >= 0) b.className += " must";
       b.addEventListener("click", function () {
         var k = pick.ids.indexOf(id);
+        if (k >= 0 && qd && qd.need.indexOf(id) >= 0) { pick.look = id; return showParty(); }   // 의뢰 필수 동료는 못 뺀다
         if (k >= 0) pick.ids.splice(k, 1);
         else if (pick.ids.length < 3) pick.ids.push(id);
         pick.look = id;
@@ -527,30 +570,41 @@
     } else sh = '<div class="ps-row ps-none">' + (pick.ids.length === 3 ? "조합 없음 — 데려온 동료를 섞으면 조합이 켜진다" : "셋을 고르면 켜질 조합이 보인다") + "</div>";
     $("#party-syn").innerHTML = sh;
     bindPerk($("#party-info"), showParty);
-    var go = $("#btn-party-go"), ok3 = pick.ids.length === 3;
+    var go = $("#btn-party-go"), ok3 = pick.ids.length === 3 && (!qd || Q.partyOk(pick.quest, pick.ids));
     go.disabled = !ok3;
-    go.innerHTML = ok3 ? "이 셋으로 출발" : "셋을 고르세요 (" + pick.ids.length + "/3)";
+    go.innerHTML = ok3 ? (qd ? "이 셋으로 의뢰 출발" : "이 셋으로 출발") : "셋을 고르세요 (" + pick.ids.length + "/3)";
     A.show("scr-party");
   }
   function partyGo() {
     if (!pick || pick.ids.length !== 3) return;
     var m = loadMeta();
     if (!M.validParty(m, pick.ids)) return;
+    if (pick.quest) { if (!Q.partyOk(pick.quest, pick.ids)) return; return newRun(pick.quest, pick.ids.slice()); }
     m.party = pick.ids.slice(); saveMeta(m);
     newRun(pick.stage, pick.ids.slice());
   }
 
   function newRun(stageNo, party) {
     // 목록에서 새로 시작 = 타이틀에서 고른 난이도. 다시 하기(번호 없음) = 그 런의 난이도·시작 셋
-    var diff = typeof stageNo === "number" ? loadDiff() : R.diffOf(run);
+    var diff = typeof stageNo === "number" || typeof stageNo === "string" ? loadDiff() : R.diffOf(run);
     if (!party) party = run && run.start ? run.start.slice() : null;
     A.abort();
+    // 동료 의뢰 던전 (다시 하기 = 같은 의뢰)
+    var qid = typeof stageNo === "string" ? stageNo : stageNo == null && run && run.quest ? run.quest : null;
+    if (qid && Q.QUESTS[qid]) {
+      var mq = loadMeta(), qs = loadQuest();
+      if (Q.state(qs, mq, qid) === "locked" || !party || !Q.partyOk(qid, party)) { updateTitle(); return showQuests(); }
+      var seedq = A.hash.seed != null ? Number(A.hash.seed) : undefined;
+      run = R.newRun(seedq, qid, diff, party, M.growthMap(mq), { relics: M.relicsOf(mq).concat(Q.relics(qs)), variant: false, mirror: mq.unlocked.length > 3 });
+      save();
+      return showMap();
+    }
     if (typeof stageNo !== "number") stageNo = run && run.stage ? run.stage : loadStages().last || 1;
     if (!R.STAGES[stageNo] || !R.STAGES[stageNo].open) stageNo = 1;
     var rec = loadStages(); rec.last = stageNo; saveStages(rec);
     var seed = A.hash.seed != null ? Number(A.hash.seed) : undefined;
     var mt = loadMeta(), sr = loadStages();
-    var extra = { relics: M.relicsOf(mt), variant: !!((sr.clears && sr.clears[stageNo]) || (sr.hard && sr.hard[stageNo])), mirror: mt.unlocked.length > 3 };
+    var extra = { relics: M.relicsOf(mt).concat(Q.relics(loadQuest())), variant: !!((sr.clears && sr.clears[stageNo]) || (sr.hard && sr.hard[stageNo])), mirror: mt.unlocked.length > 3 };
     run = R.newRun(seed, stageNo, diff, party, M.growthMap(mt), extra);
     save();
     showMap();
@@ -560,13 +614,65 @@
     run = sv;
     if (run.pending) showNode(); else showMap();
   }
+  // ---------- 동료 의뢰 (docs/QUESTS.md) ----------
+  function qFace(id) { var c = C.CAST[id]; return '<img class="' + (c.pixel ? "px" : "") + '" src="' + c.img + '" alt="" />'; }
+  var STATE_TEXT = { locked: "🔒 잠김", lead: "✦ 새 단서", open: "출발 가능", clear: "✓ 클리어" };
+  function showQuests() {
+    leaveScene();
+    var qs = loadQuest(), m = loadMeta();
+    $("#quest-sub").textContent = "클리어 " + Q.progress(qs) + "/" + Q.LIST.length + " · 동료가 단서를 준다";
+    $("#quest-detail").hidden = true; $("#quest-list").hidden = false;
+    var box = $("#quest-list"); box.innerHTML = "";
+    Q.LIST.forEach(function (id) {
+      var q = Q.QUESTS[id], stt = Q.state(qs, m, id);
+      var el = document.createElement(stt === "locked" ? "div" : "button");
+      if (stt !== "locked") { el.type = "button"; el.addEventListener("click", function () { showQuest(id); }); }
+      el.id = "qc-" + id; el.className = "qcard q-" + stt;
+      var sub = stt === "locked" ? Q.hint(qs, m, id)
+        : stt === "lead" ? R.josa(C.CAST[q.who].name, "이", "가") + " 할 말이 있다"
+        : stt === "open" ? q.place + " · 4층 · 보스 " + q.boss
+        : "이야기 「" + q.chapter.title + "」 · 다시 도전";
+      el.innerHTML = '<span class="qc-face">' + (stt === "locked" ? "🔒" : qFace(q.who)) + '</span><span class="qc-t"><b>「' + esc(q.name) + "」 <em>" + STATE_TEXT[stt] + "</em></b><small>" + esc(sub) + "</small></span>";
+      box.appendChild(el);
+    });
+    A.show("scr-quest");
+  }
+  function showQuest(id, mode) {
+    var qs = loadQuest(), m = loadMeta(), q = Q.QUESTS[id], stt = Q.state(qs, m, id);
+    if (stt === "locked") return showQuests();
+    var d = $("#quest-detail"), acts = $("#quest-acts");
+    $("#quest-list").hidden = true; d.hidden = false;
+    var h = '<div class="qd-head">' + qFace(q.who) + "<div><b>「" + esc(q.name) + "」</b><small>" + esc(q.door) + " · " + esc(q.place) + "</small></div></div>";
+    acts.innerHTML = "";
+    if (stt === "lead") {
+      h += q.lead.map(function (ln) { return '<p class="room-msg talk"><b>' + esc(ln[0]) + "</b> " + esc(ln[1]) + "</p>"; }).join("");
+      acts.appendChild(btn("의뢰를 받는다", "던전이 열린다 · 진행은 자동 저장", "primary big", function () {
+        var q2 = loadQuest(); if (Q.hear(q2, loadMeta(), id)) saveQuest(q2);
+        if (SND) SND.sfx("click");
+        showQuest(id);
+      }, "btn-quest-hear"));
+    } else if (stt === "clear" && mode !== "go") {
+      h += '<div class="qd-chapter"><b>이야기 · ' + esc(q.chapter.title) + "</b><p>" + esc(q.chapter.text) + "</p></div>";
+      acts.appendChild(btn("다시 도전", "보상은 처음 한 번만", "", function () { showQuest(id, "go"); }, "btn-quest-again"));
+    } else {
+      h += '<p class="room-msg">' + esc(q.intro) + "</p>" +
+        '<p class="room-rule">4층 · 보스 ' + esc(q.boss) + " · 필수 " + q.need.map(function (w) { return C.CAST[w].name; }).join("·") +
+        "<br>보상: " + Object.keys(q.reward.xp).map(function (w) { return C.CAST[w].name + " 경험치 +" + q.reward.xp[w]; }).join(" · ") +
+        " · 이야기" + (q.reward.relic ? " · " + R.BOONS[q.reward.relic].name : "") + (q.reward.next ? " · 다음 단서" : "") + "</p>";
+      acts.appendChild(btn("출전 셋 고르기", (loadDiff() === "hard" ? "하드 · " : "") + "필수 동료는 빠질 수 없다", "primary big", function () { startQuest(id); }, "btn-quest-go"));
+    }
+    $("#quest-body").innerHTML = h;
+    acts.appendChild(btn("의뢰 목록", "", "ghost", showQuests, "btn-quest-list"));
+    A.show("scr-quest");
+  }
   function openMenu() { $("#pause").hidden = false; }
   function $$snd() { return Array.prototype.slice.call(document.querySelectorAll(".btn-snd")); }
 
   function init() {
     $("#btn-continue").addEventListener("click", cont);
     $("#btn-party-go").addEventListener("click", partyGo);
-    $("#btn-party-back").addEventListener("click", function () { pick = null; updateTitle(); A.show("scr-title"); });
+    $("#btn-party-back").addEventListener("click", function () { var wasQ = pick && pick.quest; pick = null; updateTitle(); if (wasQ) return showQuest(wasQ); A.show("scr-title"); });
+    $("#btn-quest-back").addEventListener("click", function () { updateTitle(); A.show("scr-title"); });
     $("#btn-diff-normal").addEventListener("click", function () { saveDiff("normal"); updateTitle(); });
     $("#btn-diff-hard").addEventListener("click", function () { saveDiff("hard"); updateTitle(); });
     $("#btn-retry").addEventListener("click", function () { newRun(); });
@@ -592,6 +698,7 @@
     window.__fcbRun = {
       get run() { return run; }, R: R, newRun: newRun, cont: cont, showMap: showMap, showNode: showNode, enterNode: enterNode,
       result: result, save: save, loadSave: loadSave, battle: false, loadStages: loadStages, updateTitle: updateTitle, loadDiff: loadDiff, loadMeta: loadMeta, saveMeta: saveMeta, startStage: startStage, M: M,
+      Q: Q, loadQuest: loadQuest, saveQuest: saveQuest, showQuests: showQuests, showQuest: showQuest, startQuest: startQuest,
     };
   }
   init();
