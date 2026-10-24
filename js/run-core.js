@@ -53,6 +53,17 @@
     moat_well: { name: "해자 우물", line: "해자 물은 차다. 값을 내면 상처를 씻을 수 있다." },
     gatehouse: { name: "성문 누각", line: "그림자 기사: 이 누각은 그림자의 것이다." },
     great_gate: { name: "큰 성문", line: "요새 문지기: 열쇠는 넘겼다. 이 문은 이제 아무도 지나가지 못한다." },
+    // 스테이지 5 왕좌 너머 (docs/stage-5.md "방 한 줄")
+    throne_steps: { name: "왕좌 계단", line: "왕좌는 비어 있다. 그 뒤에 문이 하나 더 있다." },
+    door_hall: { name: "문들의 복도", line: "지금까지 연 문이 벽에 걸려 있다." },
+    echo_hall: { name: "메아리 홀", line: "고르지 않은 방의 소리가 들린다." },
+    three_altar: { name: "세 문의 제단", line: "카드와 룬과 깃발이 한 제단에 놓였다." },
+    mark_shield: { name: "표식의 방 · 방패", line: "문 앞에 방패 하나가 세워져 있다." },
+    mark_card: { name: "표식의 방 · 카드", line: "카드 한 장이 문틈에 끼어 있다." },
+    mark_rune: { name: "표식의 방 · 글자", line: "벽에 룬 한 획이 새겨져 있다." },
+    last_well: { name: "마지막 우물", line: "저택 첫 우물과 같은 물이다. 값을 내면 마실 수 있다." },
+    shadow_throne: { name: "그림자 왕좌", line: "그림자 장군: 왕좌는 비었다. 명은 아직 남았다." },
+    beyond_throne: { name: "왕좌 너머", line: "아르: 문은 내가 열었다. 이 저택은 내 카드 한 장이다." },
   };
 
   var KIND = {
@@ -278,6 +289,48 @@
     },
   };
 
+  // 스테이지 5 만남 (docs/stage-5.md 대사 그대로). 스테이지 1의 세 사람이 표식으로 기다린다.
+  // reunion = 가렌·마리엘·레오 중 한 명이라도 출전 (먼저 데려간 표식이 다음 표식을 알아본다)
+  var MEET5 = {
+    garen: {
+      room: "mark_shield",
+      reunion: null,
+      open: [
+        ["가렌", "방패를 세워 둔 건 나요. 다음 문의 표식이 되라고."],
+        ["아린", "가렌. 마지막 문까지 와 있었나."],
+        ["가렌", "데려가지 못한 이름은 여기서 기다리오. 이번엔 데려가시오."],
+      ],
+      full: [["저택", "이름을 더 받지 않는다."], ["가렌", "방패는 문 앞에 두겠소. 이름은 이미 둘이오."]],
+    },
+    mariel: {
+      room: "mark_card",
+      reunion: [
+        ["마리엘", "방패가 먼저 와 있군. 카드는 늦지 않았다."],
+        ["가렌", "마리엘. 패는 남았소?"],
+        ["마리엘", "한 장. 마지막 문에 쓸 패다."],
+      ],
+      open: [
+        ["마리엘", "문틈에 낀 카드는 내 것이다. 나는 마리엘."],
+        ["아리아", "저택 첫 층에서 본 카드다."],
+        ["마리엘", "그 카드가 표식이었다. 이번엔 같이 연다."],
+      ],
+      full: [["저택", "이름을 더 받지 않는다."], ["마리엘", "카드는 문틈에 남긴다. 이름은 이미 둘이다."]],
+    },
+    leo: {
+      room: "mark_rune",
+      reunion: [
+        ["레오", "먼저 온 표식이 있군. 글자가 늦었다."],
+        ["레오", "룬 한 획은 남겨 두었다. 이제 같이 긋는다."],
+      ],
+      open: [
+        ["레오", "벽의 한 획은 내 글자다. 나는 레오."],
+        ["세라", "저택 저장고에서 본 글자군요."],
+        ["레오", "그게 표식이었다. 자리가 있으면 서겠다."],
+      ],
+      full: [["저택", "이름을 더 받지 않는다."], ["레오", "한 획만 남긴다. 사람은 다음 판이다."]],
+    },
+  };
+
   // 스테이지. open = 테스트(node tools/run-sim.js 100)를 통과해 타이틀 목록에 열린 것만 true.
   // 수치(SCALE·적 수치)는 스테이지마다 같다. 스테이지 2 적은 스테이지 1 짝과 같은 수치·AI (이슈 1 보류).
   var STAGES = {
@@ -387,7 +440,40 @@
       lose: "성문 잔해가 셋을 덮었다. 재가 가라앉으면 문은 다시 닫힌다.",
       winImg: "img/garen.webp", loseImg: "img/gatekeeper.png",
     },
-    5: { no: 5, name: "왕좌 너머", door: "저택이 삼킨 마지막 문", open: false },
+    5: {
+      no: 5, name: "왕좌 너머", door: "저택이 삼킨 마지막 문", boss: "아르", open: true, bgm: "sfx/bgm-stage5.mp3", bg: "img/stage5.webp",
+      plan: [
+        { kinds: ["battle", "battle"], tier: "t1" },
+        { kinds: ["battle", "event", "meet:garen"], tier: "t1" },
+        { kinds: ["elite", "battle"], tier: "t2" },
+        { kinds: ["rest", "meet:mariel", "event"], tier: "t2" },
+        { kinds: ["battle", "elite", "meet:leo"], tier: "t3" },
+        { kinds: ["boss"], tier: "boss" },
+      ],
+      // 삼킨 문 셋의 적을 섞는다. 짝은 스테이지 1과 같은 AI(grunt/wolf) 자리로만
+      packs: {
+        t1: [["shade", "puppet"], ["wolf", "moss_turtle"]],
+        t2: [["bat", "ember_fox"], ["puppet", "shadow_spear"]],
+        t3: [["wolf", "shadow_spear"], ["moss_turtle", "shade"]],
+        ambush: [["puppet", "ember_fox"]],
+        elite: [["shade", "shadow_general"]],
+        boss: [["ember_fox", "ar"]],
+      },
+      battleRooms: ["throne_steps", "door_hall", "echo_hall", "three_altar"],
+      floorLine: [
+        "왕좌 계단. 왕좌는 비었고, 그 뒤에 마지막 문이 있다.",
+        "문들의 복도. 문 앞에 방패 하나가 서 있다.",
+        "그림자 왕좌. 장군의 명이 마지막으로 남은 곳.",
+        "마지막 우물. 문틈에 카드 한 장이 끼어 있다.",
+        "표식의 방. 벽에 룬 한 획이 남았다.",
+        "왕좌 너머. 아르가 저택을 카드처럼 펼쳤다.",
+      ],
+      meet: MEET5, reunionWith: ["garen", "mariel", "leo"],
+      rooms: { elite: "shadow_throne", boss: "beyond_throne", rest: "last_well", treasure: "three_altar", event: "three_altar", first: "throne_steps" },
+      win: "아르의 카드가 흩어졌다. 삼킨 문이 하나씩 제 세계로 돌아간다. 저택은 마침내 문을 닫는다.",
+      lose: "아르가 셋을 카드 한 장에 접었다. 저택은 첫 문부터 다시 섞인다.",
+      winImg: "img/leo.webp", loseImg: "img/ar.webp",
+    },
   };
   function stageOf(run) { return STAGES[(run && run.stage) || 1] || STAGES[1]; }
   function openStages() { return Object.keys(STAGES).map(Number).filter(function (n) { return STAGES[n].open; }); }

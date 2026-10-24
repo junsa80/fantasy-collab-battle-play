@@ -26,6 +26,7 @@
     shadow_spear: "가장 다친 아군을 찌른다",
     shadow_knight: "⚠ 그림자 돌격(전체) 충전 → 피해를 모아 BREAK",
     gatekeeper: "⬇ 성문 낙하 예고 · ⚠ 성문 봉쇄 충전(전체+속박)",
+    ar: "🃏 카드 낙인 예고 · ⚠ 균열 포식 충전(전체+봉인)",
   };
   function eliteName(n) { var id = n.pack.filter(function (x) { return C.ENEMY[x].boss; })[0]; return id ? C.ENEMY[id].name : "강적"; }
   var KIND_DESC = {

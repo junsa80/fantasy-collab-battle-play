@@ -179,6 +179,9 @@
     moves: { hit: "흑기사 참격", charge: "그림자 돌격", voice: "누각은… 그림자의 것이다." } };
   ENEMY.gatekeeper = { id: "gatekeeper", name: "요새 문지기", origin: "ashen", hp: 320, atk: 33, img: "img/gatekeeper.png", pixel: true, ai: "celes", boss: true, breakNeed: 60,
     moves: { hit: "철문 방패", pillar: "성문 낙하", charge: "성문 봉쇄", voice: "이 문은 닫힌다. 성문 봉쇄.", frost: "속박", enrage: "열쇠는 없다. — 문지기의 예고" } };
+  // 스테이지 5 보스 (rune-territories 아르 그림 재사용). 수치·AI는 셀레스와 같다
+  ENEMY.ar = { id: "ar", name: "아르", title: "룬 마도사", origin: "rune", hp: 320, atk: 33, img: "img/ar.webp", ai: "celes", boss: true, breakNeed: 60,
+    moves: { hit: "룬 화살", pillar: "카드 낙인", charge: "균열 포식", voice: "균열이여, 방을 삼켜라. 균열 포식.", frost: "봉인", enrage: "마지막 패는 내가 쥔다. — 아르의 예고" } };
   function mv(e, key, def) { var m = ENEMY[e.id].moves; return (m && m[key]) || def; }
 
   var WAVES = [
