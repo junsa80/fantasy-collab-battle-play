@@ -182,6 +182,17 @@
   // 스테이지 5 보스 (rune-territories 아르 그림 재사용). 수치·AI는 셀레스와 같다
   ENEMY.ar = { id: "ar", name: "아르", title: "룬 마도사", origin: "rune", hp: 320, atk: 33, img: "img/ar.webp", ai: "celes", boss: true, breakNeed: 60,
     moves: { hit: "룬 화살", pillar: "카드 낙인", charge: "균열 포식", voice: "균열이여, 방을 삼켜라. 균열 포식.", frost: "봉인", enrage: "마지막 패는 내가 쥔다. — 아르의 예고" } };
+  // 강적 변종 (docs/GROWTH.md ③): 그 스테이지를 한 번 깨면 3층 강적이 바뀐다. 수치·AI는 그 강적과 같다(general 260/30, 브레이크 45). 그림은 있는 것
+  ENEMY.alpha_wolf = { id: "alpha_wolf", name: "서리 늑대 우두머리", origin: "hunt", hp: 260, atk: 30, img: "img/wolf.webp", ai: "general", boss: true, breakNeed: 45, variant: true,
+    moves: { hit: "우두머리 송곳니", charge: "무리 부르기", voice: "무리는 셋이었다. 이제 하나 남았다." } };
+  ENEMY.bat_lord = { id: "bat_lord", name: "흡혈 박쥐 군주", origin: "deck", hp: 260, atk: 30, img: "img/bat.webp", ai: "general", boss: true, breakNeed: 45, variant: true,
+    moves: { hit: "핏빛 날개", charge: "박쥐 떼", voice: "거꾸로 매달린 건 너희다." } };
+  ENEMY.fox_elder = { id: "fox_elder", name: "불꽃여우 장로", origin: "rune", hp: 260, atk: 30, img: "img/ember_fox.webp", ai: "general", boss: true, breakNeed: 45, variant: true,
+    moves: { hit: "여우불", charge: "불꽃 고리", voice: "칸 하나 태우는 데 꼬리 하나면 된다." } };
+  ENEMY.spear_captain = { id: "spear_captain", name: "그림자 창병 대장", origin: "ashen", hp: 260, atk: 30, img: "img/shadow_spear.png", pixel: true, ai: "general", boss: true, breakNeed: 45, variant: true,
+    moves: { hit: "대장의 창", charge: "창벽 돌격", voice: "누각은 넘겼다. 창은 넘기지 않는다." } };
+  ENEMY.knox_guard = { id: "knox_guard", name: "녹스 — 저택 경비", origin: "deck", hp: 260, atk: 30, img: "img/knox.webp", ai: "general", boss: true, breakNeed: 45, variant: true,
+    moves: { hit: "녹슨 대검", charge: "마지막 근무", voice: "여왕의 성문은 닫혔다. 그래서 여기서 근무한다." } };
   function mv(e, key, def) { var m = ENEMY[e.id].moves; return (m && m[key]) || def; }
 
   var WAVES = [

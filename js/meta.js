@@ -151,7 +151,7 @@
     return { id: id, gain: m.xp[id] - x0, xp: m.xp[id], from: before, to: after, up: after.lv > before.lv, pending: pending(m, id) };
   }
   function award(m, run) {
-    var full = runXp(run), out = [];
+    var full = runXp(run), out = [], rel0 = relicsOf(m);
     var roster = (run.roster || []).slice();
     roster.forEach(function (id) { unlock(m, id); });
     m.unlocked.forEach(function (id) {
@@ -159,13 +159,103 @@
       var r = addXp(m, id, bench ? Math.round(full * XP.bench) : full);
       if (r) { r.bench = bench; out.push(r); }
     });
-    return { xp: full, list: out };
+    m.relics = relicsOf(m);
+    return { xp: full, list: out, relics: m.relics.filter(function (x) { return rel0.indexOf(x) < 0; }) };
   }
   function nextAt(m, id) { var lv = level(m, id); return lv >= MAX_LV ? null : THRESH[lv + 1]; }
 
+  // ---------- ③ 컨텐츠 (docs/GROWTH.md) ----------
+  // 모닥불 대화: 명단 동료 Lv2·Lv4·Lv7 에 하나씩. 처음 들으면 경험치 +15
+  var BOND_LV = [2, 4, 7], BOND_XP = 15, MIRROR_XP = 20;
+  var BONDS = {
+      "arin": {
+          "2": "왕관은 무너졌어도 새벽은 온다. 나는 그걸 믿고 걷는다.",
+          "4": "장군을 벨 때마다 옛 명령이 들린다. 그래도 멈추지 않는다.",
+          "7": "이 저택에서 만난 이름들, 왕성으로 데려가고 싶다. 전부."
+      },
+      "sera": {
+          "2": "성역의 물이 여기선 값을 받네요. 그래도 기도는 공짜예요.",
+          "4": "폐하가 웃는 걸 오랜만에 봤어요. 이 방 덕분인지도요.",
+          "7": "쓰러진 사람을 일으키는 건 제 몫이에요. 끝까지요."
+      },
+      "aria": {
+          "2": "셀레스를 쫓다 여기까지 왔다. 표적이 출구라니, 웃기지.",
+          "4": "혼자 사냥하는 게 편했는데. 등 뒤가 든든한 것도 나쁘지 않네.",
+          "7": "방패는 지키라고 있는 거다. 이번엔 너희를 지킨다."
+      },
+      "garen": {
+          "2": "방패가 무거운 날은 폐하 뒷모습을 보오. 그럼 가벼워지오.",
+          "4": "성문을 지키지 못한 밤을 잊지 않소. 그래서 앞에 서는 거요.",
+          "7": "이번 문은 끝까지 막겠소. 누구의 이름도 흘리지 않게."
+      },
+      "mariel": {
+          "2": "패는 읽는 거다. 운에 맡기는 건 하수나 하는 짓이지.",
+          "4": "무대가 뒤집혀도 박자는 그대로다. 너희 박자도 이제 알겠다.",
+          "7": "마지막 패는 남겨 둔다. 같이 뒤집을 사람이 생겼으니까."
+      },
+      "leo": {
+          "2": "칸마다 이름을 새겼다. 지워져도 다시 새기면 된다.",
+          "4": "상자 속 글자는 내가 남긴 표식이다. 찾아 줘서 고맙다.",
+          "7": "이 저택의 칸도 언젠가 이름을 되찾겠지. 그때까지 같이 긋자."
+      },
+      "serena": {
+          "2": "박자를 세는 버릇이 있어요. 싸울 때도, 걸을 때도.",
+          "4": "마리엘은 무뚝뚝해도 박자를 맞춰 줘요. 당신들도 그렇고요.",
+          "7": "마지막 곡은 아침에 끝나요. 그때까지 같이 춰 줄래요?"
+      },
+      "odette": {
+          "2": "오늘 일도 적어 둘게요. 이긴 날도, 진 날도.",
+          "4": "기록이 남으면 사람은 다시 일어설 수 있어요. 제17조처럼요.",
+          "7": "이 저택의 마지막 장은 우리가 같이 쓰는 거예요."
+      },
+      "noel": {
+          "2": "쉼에도 값이 있다. 나는 그 값을 깎는 사람이다.",
+          "4": "레오의 칸 값은 아직 장부에 남아 있다. 이번엔 탕감하지.",
+          "7": "장부를 닫을 때가 왔다. 받을 건 받고, 줄 건 준다."
+      },
+      "lin": {
+          "2": "이 방, 생각보다 넓어. 재 보니까 문이 하나 더 있어.",
+          "4": "싸움터라도 원래 이름은 있었을 거야. 그걸 잊지 않으려고 재.",
+          "7": "다음 칸은 내가 먼저 잴게. 너희는 걷기만 해."
+      },
+      "arthur": {
+          "2": "길은 내가 안다. 잔해 사이라도, 저택 속이라도.",
+          "4": "성문 문지기를 기억한다. 그도 처음엔 사람을 지켰다.",
+          "7": "맹세문은 반쯤 탔지만 남은 반은 아직 읽힌다. 너희를 지킨다."
+      },
+      "kael": {
+          "2": "하르트만은 몰락했지만 갑옷은 아직 무겁다. 그게 자랑이다.",
+          "4": "장부는 내 손에 있다. 성문을 연 이름도 거기 적혀 있다.",
+          "7": "무너지지 않는다. 내가 앞에 있는 한, 아무도."
+      }
+  };
+  function bondNext(m, id) {
+    var lv = level(m, id), heard = (m.bonds && m.bonds[id]) || [];
+    for (var i = 0; i < BOND_LV.length; i++) if (lv >= BOND_LV[i] && heard.indexOf(BOND_LV[i]) < 0 && BONDS[id]) return BOND_LV[i];
+    return null;
+  }
+  function hearBond(m, id, L) {
+    if (bondNext(m, id) !== L) return null;
+    m.bonds = m.bonds || {}; m.bonds[id] = (m.bonds[id] || []).concat([L]);
+    var r = addXp(m, id, BOND_XP);
+    if (r) r.line = BONDS[id][String(L)];
+    return r;
+  }
+  // 유물: 세계마다 하나, 그 세계 동료가 Lv4 가 되면 보물 고르기에 섞인다
+  var RELIC_LV = 4;
+  var RELIC_OF = { ashen: "crown", hunt: "arrow", deck: "queen", rune: "healrune" };
+  function relicsOf(m) {
+    var out = [];
+    Object.keys(RELIC_OF).forEach(function (o) {
+      if ((m.unlocked || []).some(function (id) { return C.CAST[id].origin === o && level(m, id) >= RELIC_LV; })) out.push(RELIC_OF[o]);
+    });
+    return out;
+  }
+
   var api = { KEY: KEY, STARTERS: STARTERS, ORDER: ORDER, fresh: fresh, normalize: normalize, unlock: unlock, migrate: migrate, validParty: validParty, defaultParty: defaultParty,
     MAX_LV: MAX_LV, THRESH: THRESH, XP: XP, PER_LV: PER_LV, PERK: PERK, PICKS: PICKS, PERK_LV: PERK_LV,
-    xpOf: xpOf, level: level, levelOfXp: levelOfXp, perkKeys: perkKeys, pending: pending, choosePerk: choosePerk, stats: stats, statsAt: statsAt, growthMap: growthMap, runXp: runXp, addXp: addXp, award: award, nextAt: nextAt };
+    xpOf: xpOf, level: level, levelOfXp: levelOfXp, perkKeys: perkKeys, pending: pending, choosePerk: choosePerk, stats: stats, statsAt: statsAt, growthMap: growthMap, runXp: runXp, addXp: addXp, award: award, nextAt: nextAt,
+    BOND_LV: BOND_LV, BOND_XP: BOND_XP, MIRROR_XP: MIRROR_XP, BONDS: BONDS, bondNext: bondNext, hearBond: hearBond, RELIC_LV: RELIC_LV, RELIC_OF: RELIC_OF, relicsOf: relicsOf };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.FCBMeta = api;
 })(this);

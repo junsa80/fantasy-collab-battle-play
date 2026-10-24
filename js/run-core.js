@@ -505,7 +505,21 @@
     guard: { name: "전술 · 수호", text: "방어할 때 필살 게이지 +15 더", mod: true },
     holy: { name: "성수", text: "전원 HP +35 · 쓰러진 아군도 일으킴" },
     dawn: { name: "새벽 조각", text: "전원 필살 게이지 +50" },
+    // 유물 (docs/GROWTH.md ③): 그 세계 동료가 Lv4 가 되면 고르기에 섞인다. 새 저장에는 안 나온다
+    crown: { name: "유물 · 왕관 문장", text: "잿빛 왕관 아군, 전투 시작 필살 게이지 +20", mod: true, relic: "ashen" },
+    arrow: { name: "유물 · 사냥 화살촉", text: "기본 공격 피해 +15%", mod: true, relic: "hunt" },
+    queen: { name: "유물 · 여왕의 카드", text: "필살기를 쓰면 다른 아군 필살 게이지 +10", mod: true, relic: "deck" },
+    healrune: { name: "유물 · 치유 룬", text: "전투에서 이기면 전원 최대 HP 10% 회복", mod: true, relic: "rune" },
   };
+  // 강적 변종: 스테이지를 한 번 깨면 3층 강적 자리에 (수치·AI 같음)
+  var VARIANT = {
+    1: { id: "alpha_wolf", line: "서리 늑대 우두머리: 무리는 셋이었다. 이제 하나 남았다." },
+    2: { id: "bat_lord", line: "흡혈 박쥐 군주: 거꾸로 매달린 건 너희다." },
+    3: { id: "fox_elder", line: "불꽃여우 장로: 칸 하나 태우는 데 꼬리 하나면 된다." },
+    4: { id: "spear_captain", line: "그림자 창병 대장: 누각은 넘겼다. 창은 넘기지 않는다." },
+    5: { id: "knox_guard", line: "녹스: 여왕의 성문은 닫혔다. 그래서 여기서 근무한다." },
+  };
+  var VARIANT_XP = 25;
   var REST = { heal: 0.5, gauge: 40 };          // 우물: 최대 HP 50% 회복(부활) / 명상: 게이지 +40
   // 전투 뒤: 쓰러진 아군 reviveHp 로 일어남 · 게이지는 keepGauge 만큼만 이어감 · 다음 전투 시작 +gaugeStart
   var AFTER = { reviveHp: 0.25, keepGauge: 0.5, gaugeStart: 10 };
@@ -550,7 +564,7 @@
   }
 
   // party: 출전 고르기에서 고른 셋 (없으면 시작 셋 = 지금과 같다)
-  function newRun(seed, stage, diff, party, growth) {
+  function newRun(seed, stage, diff, party, growth, extra) {
     if (seed == null) seed = (Date.now() & 0x7fffffff);
     var st = STAGES[stage] && STAGES[stage].plan ? STAGES[stage] : STAGES[1];
     var r = rng(seed);
@@ -573,6 +587,18 @@
     };
     // 성장 값(Lv2 이상·갈림길)이 있을 때만. 새 저장은 키 자체가 없다
     if (g) run.growth = g;
+    // ③ 컨텐츠 (meta 가 있을 때만): 유물 후보 · 3층 강적 변종 · 균열 거울
+    if (extra) {
+      if (extra.relics && extra.relics.length) run.relicPool = extra.relics.filter(function (id) { return BOONS[id] && BOONS[id].relic; });
+      if (extra.variant && VARIANT[st.no]) {
+        map[2].forEach(function (n) {
+          if (n.kind !== "elite") return;
+          n.pack = n.pack.map(function (id) { return C.ENEMY[id].boss ? VARIANT[st.no].id : id; });
+          n.variant = VARIANT[st.no].id;
+        });
+      }
+      if (extra.mirror) run.mirror = 1;
+    }
     return run;
   }
 
@@ -591,7 +617,15 @@
   function meetKnown(run, who) { return run.roster.indexOf(who) >= 0; }
 
   function mods(run) {
-    return { rally: run.boons.indexOf("rally") >= 0 ? 5 : 0, guardPlus: run.boons.indexOf("guard") >= 0 ? 15 : 0 };
+    var o = { rally: run.boons.indexOf("rally") >= 0 ? 5 : 0, guardPlus: run.boons.indexOf("guard") >= 0 ? 15 : 0 };
+    // 유물 (가진 때만 키가 생긴다)
+    if (run.boons.indexOf("crown") >= 0) {
+      o.startGauge = {};
+      Object.keys(run.party).forEach(function (id) { if (C.CAST[id].origin === "ashen") o.startGauge[id] = 20; });
+    }
+    if (run.boons.indexOf("arrow") >= 0) o.basicMul = 1.15;
+    if (run.boons.indexOf("queen") >= 0) o.ultShare = 10;
+    return o;
   }
 
   function current(run) { return run.map[run.floor] || []; }
@@ -629,7 +663,9 @@
       var hp = u.alive ? u.hp : Math.round(u.maxHp * AFTER.reviveHp);
       run.party[u.id] = { hp: Math.max(1, hp), gauge: u.alive ? Math.round(u.gauge * AFTER.keepGauge) : 0 };
     });
+    if (node.variant) run.bonusXp = (run.bonusXp || 0) + VARIANT_XP;
     if (node.kind === "boss") { run.over = "win"; return "win"; }
+    if (run.boons.indexOf("healrune") >= 0) healAll(run, 0.1);
     return "next";
   }
 
@@ -656,7 +692,10 @@
   // 고를 수 있는 보물 2개 (이미 가진 전술 제외)
   function boonOffer(run, seed) {
     var r = rng(seed);
-    var pool = Object.keys(BOONS).filter(function (id) { return !BOONS[id].mod || run.boons.indexOf(id) < 0; });
+    var pool = Object.keys(BOONS).filter(function (id) {
+      if (BOONS[id].relic && !(run.relicPool && run.relicPool.indexOf(id) >= 0)) return false;
+      return !BOONS[id].mod || run.boons.indexOf(id) < 0;
+    });
     var a = pickOf(r, pool);
     var rest = pool.filter(function (x) { return x !== a; });
     return [a, pickOf(r, rest)];
@@ -731,7 +770,8 @@
     if (run.floor === 0) return line + " 문은 " + current(run).length + "개. 하나만 열 수 있다.";
     return line;
   }
-  function eliteLine(run) {
+  function eliteLine(run, node) {
+    if (node && node.variant && VARIANT[stageOf(run).no]) return VARIANT[stageOf(run).no].line;
     if (stageOf(run).no !== 1) return ROOMS[stageOf(run).rooms.elite].line;
     if (run.active && run.active.indexOf("arin") >= 0) return "아린: 장군은 내 명을 듣던 자다. 그 명은 이미 더럽혀졌다.";
     return ROOMS.watch.line;
@@ -747,7 +787,7 @@
     STAGES: STAGES, stageOf: stageOf, openStages: openStages, josa: josa, STAGE_KEY: "fcb-stages-v1",
     newRun: newRun, current: current, battleConfig: battleConfig, applyBattle: applyBattle,
     healAll: healAll, addGauge: addGauge, gainBoon: gainBoon, boonOffer: boonOffer, rollEvent: rollEvent,
-    choose: choose, advance: advance, maxHp: maxHp, partySummary: partySummary, validRun: validRun, mods: mods, meetScript: meetScript, meetKnown: meetKnown, recruit: recruit, setActive: setActive, mapLine: mapLine, eliteLine: eliteLine,
+    choose: choose, advance: advance, maxHp: maxHp, VARIANT: VARIANT, VARIANT_XP: VARIANT_XP, partySummary: partySummary, validRun: validRun, mods: mods, meetScript: meetScript, meetKnown: meetKnown, recruit: recruit, setActive: setActive, mapLine: mapLine, eliteLine: eliteLine,
   };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.FCBRun = api;

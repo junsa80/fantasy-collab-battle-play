@@ -14,6 +14,11 @@
     shade: "무작위 한 명을 벤다",
     wolf: "가장 다친 아군을 노린다",
     shadow_general: "⚠ 그림자 명령(전체) 충전 → 피해를 모아 BREAK",
+    alpha_wolf: "⚠ 무리 부르기(전체) 충전 → 피해를 모아 BREAK",
+    bat_lord: "⚠ 박쥐 떼(전체) 충전 → 피해를 모아 BREAK",
+    fox_elder: "⚠ 불꽃 고리(전체) 충전 → 피해를 모아 BREAK",
+    spear_captain: "⚠ 창벽 돌격(전체) 충전 → 피해를 모아 BREAK",
+    knox_guard: "⚠ 마지막 근무(전체) 충전 → 피해를 모아 BREAK",
     celes: "❄ 얼음 기둥 예고 · ⚠ 서리 노바 충전(전체+빙결)",
     puppet: "무작위 한 명을 실로 당긴다",
     bat: "가장 다친 아군을 문다",
@@ -151,6 +156,11 @@
     save();
     showNode();
   }
+  function bondCand() {
+    var m = loadMeta(), out = null;
+    run.roster.some(function (id) { var L = M.bondNext(m, id); if (L) { out = { id: id, L: L }; return true; } return false; });
+    return out;
+  }
   function curNode() { return run.pending ? R.current(run)[run.pending.idx] : null; }
 
   function showNode() {
@@ -159,7 +169,7 @@
     var p = run.pending, k = R.KIND[node.kind], room = R.ROOMS[node.room];
     $("#node-floor").textContent = floorText();
     $("#node-kind").textContent = k.icon + " " + k.name + " · " + room.name;
-    var line = node.kind === "elite" ? R.eliteLine(run) : room.line;
+    var line = node.kind === "elite" ? R.eliteLine(run, node) : room.line;
     $("#room-head").innerHTML = "<b>" + esc(room.name) + '</b><p>“' + esc(line) + "”</p>";
     var body = $("#room-body"), acts = $("#room-actions");
     body.innerHTML = ""; acts.innerHTML = "";
@@ -227,7 +237,9 @@
         delete p.swap; delete p.pick; save(); showNode();
       }, "btn-swap-ok"));
     } else if (node.kind === "rest") {
-      body.innerHTML = '<p class="room-msg">우물물은 차갑다. 둘 중 하나만 할 시간이 있다.</p>';
+      body.innerHTML = (p.talked ? '<p class="room-msg talk"><b>' + esc(C.CAST[p.talked.id].name) + "</b> " + esc(p.talked.line) + "</p>" +
+        '<p class="room-rule">모닥불 대화 · ' + esc(C.CAST[p.talked.id].name) + " 경험치 +" + M.BOND_XP + (p.talked.up ? " · Lv" + p.talked.up + "!" : "") + "</p>" : "") +
+        '<p class="room-msg">우물물은 차갑다. 둘 중 하나만 할 시간이 있다.</p>';
       acts.appendChild(btn("우물 · 회복", "전원 최대 HP 50% 회복", "primary", function () {
         var got = R.healAll(run, R.REST.heal);
         doneMsg("우물물로 상처를 씻었다. " + Object.keys(got).map(function (id) { return C.CAST[id].name + " +" + got[id]; }).join(" · "));
@@ -238,10 +250,31 @@
       if (run.roster.length > 3) acts.appendChild(btn("출전을 바꾼다", "쉬는 사람과 교대", "ghost", function () {
         p.swap = true; save(); showNode();
       }, "btn-swap"));
+      // 모닥불 대화: 명단 동료 Lv2·4·7 에 하나씩 (우물·명상과 별개, 이 방에서 한 번)
+      var tk = p.talked ? null : bondCand();
+      if (tk) acts.appendChild(btn("대화 · " + C.CAST[tk.id].name, "Lv" + tk.L + " 이야기 · 경험치 +" + M.BOND_XP, "ghost", function () {
+        var mm = loadMeta(), r = M.hearBond(mm, tk.id, tk.L);
+        if (!r) return;
+        saveMeta(mm);
+        p.talked = { id: tk.id, L: tk.L, line: r.line, up: r.up ? r.to.lv : 0 };
+        save(); showNode();
+      }, "rest-talk"));
     } else if (node.kind === "treasure") {
       p.reward = R.boonOffer(run, run.seed * 31 + run.floor);
       p.msg = "룬 상자가 열렸다. 하나만 챙길 수 있다.";
       save(); return showNode();
+    } else if (node.kind === "event" && p.mirror) {
+      // 균열 거울 (해금 동료 넷 이상): 명단 한 명 경험치 +20 · 전원 게이지 +15
+      body.innerHTML = '<p class="room-msg">균열이 거울처럼 고요하다. 비친 사람만 조금 자란다.</p>';
+      run.roster.forEach(function (id) {
+        var mm0 = loadMeta();
+        acts.appendChild(btn(R.josa(C.CAST[id].name, "을", "를") + " 비춘다", "Lv" + M.level(mm0, id) + " · 경험치 +" + M.MIRROR_XP, "", function () {
+          var mm = loadMeta(), r = M.addXp(mm, id, M.MIRROR_XP);
+          saveMeta(mm);
+          R.addGauge(run, 15);
+          doneMsg("거울 속 " + C.CAST[id].name + " 경험치 +" + M.MIRROR_XP + (r && r.up ? " · Lv" + r.to.lv + "!" : "") + " · 전원 필살 게이지 +15");
+        }, "mirror-" + id));
+      });
     } else if (node.kind === "event") {
       if (p.roll == null) {
         body.innerHTML = '<p class="room-msg">뒤집힌 잔 사이 카드 한 장. 집으면 균열이 주사위를 굴린다.</p>' +
@@ -252,6 +285,9 @@
           if (!e.ambush) { p.reward = R.boonOffer(run, run.seed * 17 + run.floor); p.msg = "주사위 " + e.die + " · 균열이 조용하다. 카드 뒤에 보물이 있었다."; }
           save(); showNode();
         }, "event-roll"));
+        if (run.mirror) acts.appendChild(btn("거울을 본다", "한 명 경험치 +" + M.MIRROR_XP + " · 전원 필살 게이지 +15", "", function () {
+          p.mirror = 1; save(); showNode();
+        }, "event-mirror"));
         acts.appendChild(btn("지나간다", "아무 일 없이 다음 층", "ghost", nextFloor, "btn-skip"));
       } else {
         fightPack = stage().packs.ambush[0]; scale = "ambush";
@@ -271,7 +307,7 @@
       }).join("");
       body.appendChild(foes);
       var tip = document.createElement("p"); tip.className = "room-rule";
-      tip.textContent = node.kind === "boss" ? "결전. 이기면 균열이 닫힌다." : node.kind === "elite" ? "강적. 이기면 전술·보물을 고른다." : "적 카드 아래 예고를 보고 싸우세요.";
+      tip.textContent = node.kind === "boss" ? "결전. 이기면 균열이 닫힌다." : node.kind === "elite" ? (node.variant ? "변종 강적. 이기면 전술·보물 + 명단 경험치 +" + R.VARIANT_XP + "." : "강적. 이기면 전술·보물을 고른다.") : "적 카드 아래 예고를 보고 싸우세요.";
       body.appendChild(tip);
       acts.appendChild(btn(node.kind === "boss" ? "결전에 나선다" : "싸운다", "도망칠 수 없다", "primary big", function () {
         fight(node, fightPack, scale);
@@ -295,6 +331,7 @@
 
   function fight(node, pack, scale) {
     var bnode = { kind: node.kind === "event" ? "battle" : node.kind, room: node.room, pack: pack, tier: scale };
+    if (node.kind === "elite" && node.variant) bnode.variant = node.variant;
     var cfg = R.battleConfig(run, bnode, (run.seed * 131 + run.floor * 7) >>> 0);
     A.start({
       config: cfg,
@@ -380,6 +417,7 @@
           : "<span>Lv" + r.to.lv + " +" + r.gain + "</span><small>" + (nx ? "다음 Lv까지 " + (nx - r.xp) : "최대 레벨") + "</small>") +
         "</div>";
     });
+    if (res.relics && res.relics.length) h += '<div class="rg-relic">유물 해금 · ' + res.relics.map(function (id) { return esc(R.BOONS[id].name.replace("유물 · ", "")); }).join(" · ") + " — 보물 고르기에 섞인다</div>";
     var pend = null;
     m.unlocked.some(function (id) { var t = M.pending(m, id); if (t.length) { pend = { id: id, t: t[0] }; return true; } return false; });
     if (pend) h += perkPick(pend.id, pend.t, "res");
@@ -498,7 +536,9 @@
     if (!R.STAGES[stageNo] || !R.STAGES[stageNo].open) stageNo = 1;
     var rec = loadStages(); rec.last = stageNo; saveStages(rec);
     var seed = A.hash.seed != null ? Number(A.hash.seed) : undefined;
-    run = R.newRun(seed, stageNo, diff, party, M.growthMap(loadMeta()));
+    var mt = loadMeta(), sr = loadStages();
+    var extra = { relics: M.relicsOf(mt), variant: !!((sr.clears && sr.clears[stageNo]) || (sr.hard && sr.hard[stageNo])), mirror: mt.unlocked.length > 3 };
+    run = R.newRun(seed, stageNo, diff, party, M.growthMap(mt), extra);
     save();
     showMap();
   }
