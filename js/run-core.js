@@ -351,7 +351,8 @@
       no: 1, name: "균열 저택", door: "잿빛 왕관 · 헌트 나우", boss: "셀레스", open: true, bgm: null, bg: null,
       plan: FLOOR_PLAN, packs: PACKS, battleRooms: BATTLE_ROOMS, floorLine: FLOOR_LINE, meet: MEET,
       rooms: { elite: "watch", boss: "terrace", rest: "kitchen", treasure: "store", event: "banquet", first: "gate" },
-      win: "아린: “새벽은 우리 편이었어. 모두, 고마워.”", lose: "셀레스: “사냥은 끝났어. 다음엔 예고를 잘 봐.”",
+      // 결과 한 줄은 docs/STORY.md "결과 (#res-line 만)" 그대로
+      win: "셀레스가 무릎을 꺾였다. 균열이 한 박자 늦다. 저택은 아직 닫히지 않았다.", lose: "저택이 셋을 현관 밖으로 뱉었다. 문은 다시 섞인다.",
       winImg: "img/arin.png", loseImg: "img/celes.webp",
     },
     2: {
@@ -383,8 +384,8 @@
       ],
       meet: MEET2, reunionWith: "mariel",
       rooms: { elite: "balcony", boss: "queen_gate", rest: "mirror_spring", treasure: "card_table", event: "card_table", first: "mirror_gate" },
-      win: "녹스가 대검을 내려놓았다. 홀이 바로 선다. 저택은 다음 문을 연다.",
-      lose: "홀이 셋을 거꾸로 쏟았다. 왈츠는 처음부터 다시 돈다.",
+      win: "마리엘: “녹스의 근무는 끝났다. 홀이 바로 섰으니, 다음 패를 넘기자.”",
+      lose: "녹스: “근무는 끝나지 않는다. 왈츠는 처음부터 다시다.”",
       winImg: "img/mariel.webp", loseImg: "img/knox.webp",
     },
     3: {
@@ -416,8 +417,8 @@
       ],
       meet: MEET3, reunionWith: "leo",
       rooms: { elite: "gate_ruin", boss: "storm_hill", rest: "rune_spring", treasure: "scarecrow", event: "scarecrow", first: "field_gate" },
-      win: "폭풍이 걷혔다. 칸마다 이름이 돌아온다. 저택은 다음 문을 연다.",
-      lose: "밭이 셋을 고리 밖으로 밀어냈다. 칸은 다시 이름을 잃는다.",
+      win: "레오: “폭풍이 걷혔다. 칸마다 이름이 돌아온다. 이제 다음 문이다.”",
+      lose: "폭풍 거인: “이 밭의 칸은 내 하늘 아래다. 너희 이름은 지웠다.”",
       winImg: "img/leo.webp", loseImg: "img/tempest_giant.webp",
     },
     4: {
@@ -449,8 +450,8 @@
       ],
       meet: MEET4, reunionWith: ["arin", "sera", "garen"],
       rooms: { elite: "gatehouse", boss: "great_gate", rest: "moat_well", treasure: "banner_hall", event: "banner_hall", first: "ash_gate" },
-      win: "큰 성문이 열렸다. 잿빛 왕관의 길이 다시 이어진다. 저택은 마지막 문만 남았다.",
-      lose: "성문 잔해가 셋을 덮었다. 재가 가라앉으면 문은 다시 닫힌다.",
+      win: "가렌: “큰 성문이 열렸소. 왕관의 길은 이어졌고, 남은 건 마지막 문뿐이오.”",
+      lose: "요새 문지기: “열쇠는 없다. 재가 가라앉으면 이 문은 다시 닫힌다.”",
       winImg: "img/garen.webp", loseImg: "img/gatekeeper.png",
     },
     5: {
@@ -483,9 +484,9 @@
       ],
       meet: MEET5, reunionWith: ["garen", "mariel", "leo"],
       rooms: { elite: "shadow_throne", boss: "beyond_throne", rest: "last_well", treasure: "three_altar", event: "three_altar", first: "throne_steps" },
-      win: "아르의 카드가 흩어졌다. 삼킨 문이 하나씩 제 세계로 돌아간다. 저택은 마침내 문을 닫는다.",
-      lose: "아르가 셋을 카드 한 장에 접었다. 저택은 첫 문부터 다시 섞인다.",
-      winImg: "img/leo.webp", loseImg: "img/ar.webp",
+      win: "아린: “카드가 흩어졌다. 삼킨 문은 제 세계로 돌아간다. 이 저택도, 이제 문을 닫는다.”",
+      lose: "아르: “셋을 카드 한 장에 접었다. 저택은 첫 문부터 다시 섞인다.”",
+      winImg: "img/arin.png", loseImg: "img/ar.webp",
     },
   };
   function stageOf(run) { return STAGES[(run && run.stage) || 1] || STAGES[1]; }
