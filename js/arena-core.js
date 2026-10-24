@@ -293,6 +293,7 @@
         if (g.atk > 0) u.atk = g.atk;
         u.lv = g.lv || 1;
         u.perks = g.perks || {};
+        if (g.gx) u.gx = g.gx;
       });
     }
     if (opts.carry) {
@@ -306,10 +307,13 @@
     if (opts.syn && opts.syn.length) { s.syn = {}; opts.syn.forEach(function (k) { s.syn[k] = 1; }); }
     s.allies.forEach(function (u) {
       if (P(u, "vanguard") && u.alive) u.gauge = Math.min(100, u.gauge + 25);
+      if (u.gx && u.gx.gauge && u.alive) u.gauge = Math.min(100, u.gauge + u.gx.gauge);
+      if (s.mods.gaugeAll && u.alive) u.gauge = Math.min(100, u.gauge + s.mods.gaugeAll);
       if (s.mods.startGauge && s.mods.startGauge[u.id] && u.alive) u.gauge = Math.min(100, u.gauge + s.mods.startGauge[u.id]);
     });
     loadWave(s, 0);
     if (SY(s, "survey")) s.enemies.forEach(function (e) { e.mark = Math.max(e.mark, 1); });
+    if (s.mods.markStart) s.enemies.forEach(function (e) { e.mark = Math.max(e.mark, s.mods.markStart); });
     planIntents(s);
     return s;
   }
@@ -337,6 +341,7 @@
     var m = u.atkUpTurns > 0 ? u.atkUp : 1;
     if (u.frost > 0) m *= 0.85;
     if (P(u, "laststand") && u.hp <= u.maxHp * 0.4) m *= 1.3;
+    if (u.gx && u.gx.low && u.hp <= u.maxHp * 0.4) m *= u.gx.low;
     return u.atk * m;
   }
 
@@ -373,6 +378,16 @@
       ev.push({ type: "down", dst: dst.uid });
     }
     if (src.side === "ally" && src.alive && P(src, "drain") && src.hp < src.maxHp) heal(src, Math.max(1, Math.round(amt * 0.2)), ev);
+    // 회복 유물 (docs/GROWTH.md 「회복 유물」): 가진 때만 mods 키가 생긴다
+    if (src.side === "ally" && src.alive && s.mods.leech && src.hp < src.maxHp) heal(src, Math.max(1, Math.round(amt * s.mods.leech)), ev);
+    var kill = !dst.alive && ev.some(function (e) { return e.type === "down" && e.dst === dst.uid; });
+    if (src.side === "ally" && src.alive && s.mods.killHeal && kill && src.hp < src.maxHp) heal(src, Math.round(src.maxHp * s.mods.killHeal), ev);
+    // 장비 (docs/GEAR.md): 그 동료가 낀 것만 u.gx
+    var gx = src.gx;
+    if (gx && src.alive && gx.leech && src.hp < src.maxHp) heal(src, Math.max(1, Math.round(amt * gx.leech)), ev);
+    if (gx && src.alive && gx.killHeal && kill && src.hp < src.maxHp) heal(src, Math.round(src.maxHp * gx.killHeal), ev);
+    if (gx && src.alive && gx.killAll && kill) living(s.allies).forEach(function (m) { if (m.hp < m.maxHp) heal(m, Math.round(m.maxHp * gx.killAll), ev); });
+    if (gx && src.alive && gx.killGauge && kill) src.gauge = Math.min(100, src.gauge + gx.killGauge);
     return amt;
   }
 
@@ -423,6 +438,9 @@
       ev.push({ type: "guard", dst: u.uid });
       if (P(u, "breath")) heal(u, Math.round(u.maxHp * 0.12), ev);
       if (P(u, "mend")) { var lo = lowestHp(living(s.allies)); heal(lo, Math.round(lo.maxHp * 0.12), ev); }
+      if (u.gx && u.gx.guardHeal && u.hp < u.maxHp) heal(u, Math.round(u.maxHp * u.gx.guardHeal), ev);
+      if (u.gx && u.gx.guardAll) living(s.allies).forEach(function (m) { if (m.hp < m.maxHp) heal(m, Math.round(m.maxHp * u.gx.guardAll), ev); });
+      if (s.mods.guardHeal) { var lg = lowestHp(living(s.allies)); if (lg.hp < lg.maxHp) heal(lg, Math.round(lg.maxHp * s.mods.guardHeal), ev); }
       if (SY(s, "knights") && CAST[u.id].origin === "ashen") living(s.allies).forEach(function (m) { if (m !== u) m.gauge = Math.min(100, m.gauge + 8); });
     } else {
       var a = CAST[u.id].actions[key];
@@ -448,6 +466,9 @@
       if (key === "ult" && SY(s, "decree")) { if (u.id === "arin") buddy("odette", 30); if (u.id === "odette") buddy("arin", 30); }
       if (key === "skill" && a.kind === "mark" && u.id === "noel" && SY(s, "audit")) buddy("sera", 10);
       if (key === "skill" && a.kind === "mark" && P(u, "markheal")) living(s.allies).forEach(function (m) { if (m.hp < m.maxHp) heal(m, Math.round(m.maxHp * 0.05), ev); });
+      if (key === "ult" && u.gx && u.gx.ultGauge) living(s.allies).forEach(function (m) { if (m !== u) m.gauge = Math.min(100, m.gauge + u.gx.ultGauge); });
+      if (key === "ult" && u.gx && u.gx.ultAll) living(s.allies).forEach(function (m) { if (m.hp < m.maxHp) heal(m, Math.round(m.maxHp * u.gx.ultAll), ev); });
+      if (key === "ult" && s.mods.ultHeal) living(s.allies).forEach(function (m) { if (m.hp < m.maxHp) heal(m, Math.round(m.maxHp * s.mods.ultHeal), ev); });
       if (key === "ult" && P(u, "ultheal")) living(s.allies).forEach(function (m) { if (m.hp < m.maxHp) heal(m, Math.round(m.maxHp * 0.12), ev); });
       if (key === "ult" && u.id === "leo" && SY(s, "liferune")) { var rv = s.liferune ? 0 : 0.25; s.liferune = 1; s.allies.forEach(function (m) { heal(m, Math.round(m.maxHp * 0.15), ev, rv); }); }
       if (key === "skill" && a.kind === "mark" && u.id === "mariel" && SY(s, "hunt")) buddy("aria", 25);
@@ -606,6 +627,12 @@
     ev = ev.concat(end);
     if (s.phase === "enemy") {
       s.round += 1; s.stats.rounds = s.round;
+      living(s.allies).forEach(function (gu) {
+        if (!gu.gx) return;
+        if (gu.gx.regen && gu.hp < gu.maxHp) heal(gu, Math.round(gu.maxHp * gu.gx.regen), ev);
+        if (gu.gx.regenLow) { var gl = lowestHp(living(s.allies)); if (gl && gl.hp < gl.maxHp) heal(gl, Math.round(gl.maxHp * gu.gx.regenLow), ev); }
+      });
+      if (s.mods.regen) { var rl = lowestHp(living(s.allies)); if (rl && rl.hp < rl.maxHp) heal(rl, Math.round(rl.maxHp * s.mods.regen), ev); }
       if (SY(s, "bandage")) { var bl = lowestHp(living(s.allies)); if (bl && bl.hp < bl.maxHp) heal(bl, Math.round(bl.maxHp * 0.12), ev); }
       s.allies.concat(s.enemies).forEach(function (u) {
         u.guard = false;

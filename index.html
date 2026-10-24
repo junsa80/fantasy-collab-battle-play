@@ -119,8 +119,39 @@
       <div class="party-info" id="party-info"></div>
       <div class="party-actions">
         <button type="button" class="btn primary big" id="btn-party-go">이 셋으로 출발</button>
-        <button type="button" class="btn ghost" id="btn-party-back">타이틀로</button>
+        <div class="pa-row">
+          <button type="button" class="btn" id="btn-party-gear">🎒 장비</button>
+          <button type="button" class="btn ghost" id="btn-party-back">타이틀로</button>
+        </div>
       </div>
+    </section>
+
+    <!-- 장비 (docs/GEAR.md) -->
+    <section id="scr-gear" class="screen" aria-label="장비">
+      <header class="topbar">
+        <div class="tb-wave"><b>🎒 장비</b><span id="gear-sub">한 동료에 하나 · 자동 장착</span></div>
+      </header>
+      <div class="gear-slots" id="gear-slots"></div>
+      <div class="gear-diff" id="gear-diff" hidden></div>
+      <div class="gear-list" id="gear-list"></div>
+      <div class="gear-actions">
+        <button type="button" class="btn primary" id="btn-gear-auto">⚙ 자동 장착</button>
+        <button type="button" class="btn" id="btn-gear-codex">📖 도감</button>
+        <button type="button" class="btn ghost" id="btn-gear-back">돌아가기</button>
+      </div>
+    </section>
+
+    <!-- 도감 (docs/GEAR.md): 장비·유물 · 등급 · 얻는 곳 -->
+    <section id="scr-codex" class="screen" aria-label="도감">
+      <header class="topbar">
+        <div class="tb-wave"><b>📖 도감</b><span id="codex-sub">등급 · 얻는 곳</span></div>
+      </header>
+      <div class="codex-tabs">
+        <button type="button" class="btn" id="cx-tab-gear" aria-pressed="true">장비</button>
+        <button type="button" class="btn" id="cx-tab-relic" aria-pressed="false">유물</button>
+      </div>
+      <div class="codex-list" id="codex-list"></div>
+      <button type="button" class="btn ghost" id="btn-codex-back">돌아가기</button>
     </section>
 
     <!-- 동료 의뢰 (docs/QUESTS.md) -->

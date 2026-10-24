@@ -520,6 +520,14 @@
     healrune: { name: "유물 · 치유 룬", text: "전투에서 이기면 전원 최대 HP 10% 회복", mod: true, relic: "rune" },
     // 의뢰 보상 유물 (docs/QUESTS.md): 그 의뢰를 끝내면 보물 고르기에 섞인다. 새 저장에는 안 나온다
     lastcard: { name: "유물 · 마지막 패", text: "강적·보스 전투 시작 때 전원 필살 게이지 +25", mod: true, relic: "quest" },
+    // 회복 유물 (docs/GROWTH.md 「회복 유물」): 첫 영입(해금 넷) 뒤 보물·강적·균열 고르기에 섞인다. 새 저장 · 시작 셋만이면 안 나온다
+    fang: { name: "유물 · 흡혈 송곳니", text: "준 피해의 8%만큼 그 아군 HP 회복", mod: true, relic: "heal" },
+    jerky: { name: "유물 · 사냥꾼 육포", text: "적을 쓰러뜨린 아군 HP 12% 회복", mod: true, relic: "heal" },
+    gauze: { name: "유물 · 성문 붕대", text: "방어하면 가장 다친 아군 HP 10% 회복", mod: true, relic: "heal" },
+    moss: { name: "유물 · 룬 이끼", text: "매 라운드 끝 가장 다친 아군 HP 3% 회복", mod: true, relic: "heal" },
+    rose: { name: "유물 · 장미 카드", text: "필살기를 쓰면 아군 전원 HP 6% 회복", mod: true, relic: "heal" },
+    hourglass: { name: "유물 · 모래시계", text: "전투 시작 아군 전원 필살 게이지 +12", mod: true, relic: "heal", util: true },
+    lens: { name: "유물 · 측량 렌즈", text: "전투 시작 적 전원 약점 표시 (1턴)", mod: true, relic: "heal", util: true },
     seal: { name: "유물 · 하르트만 인장", text: "이기면 전원 HP 8% 회복 · 쓰러진 아군은 40%로", mod: true, relic: "quest" },
   };
   // 강적 변종: 스테이지를 한 번 깨면 3층 강적 자리에 (수치·AI 같음)
@@ -638,6 +646,14 @@
     }
     if (run.boons.indexOf("arrow") >= 0) o.basicMul = 1.15;
     if (run.boons.indexOf("queen") >= 0) o.ultShare = 10;
+    // 회복 유물 (가진 때만 키)
+    if (run.boons.indexOf("fang") >= 0) o.leech = 0.08;
+    if (run.boons.indexOf("jerky") >= 0) o.killHeal = 0.12;
+    if (run.boons.indexOf("gauze") >= 0) o.guardHeal = 0.1;
+    if (run.boons.indexOf("moss") >= 0) o.regen = 0.03;
+    if (run.boons.indexOf("rose") >= 0) o.ultHeal = 0.06;
+    if (run.boons.indexOf("hourglass") >= 0) o.gaugeAll = 12;
+    if (run.boons.indexOf("lens") >= 0) o.markStart = 1;
     return o;
   }
 
@@ -713,15 +729,26 @@
     else if (run.boons.indexOf(id) < 0) run.boons.push(id);
   }
   // 고를 수 있는 보물 2개 (이미 가진 전술 제외)
+  // 셋째 칸 유물 (희귀): 회복 다섯 + 모래시계·측량 렌즈. 이름은 예전 그대로 HEAL_RELICS
+  var HEAL_RELICS = ["fang", "jerky", "gauze", "moss", "rose", "hourglass", "lens"];
+  // 유물 등급 (도감): 일반 = 기본 전술, 희귀 = 셋째 칸, 영웅 = 세계·의뢰 유물
+  var RARITY = { common: "일반", rare: "희귀", epic: "영웅", unique: "유니크" };
+  function boonRarity(id) { var b = BOONS[id]; return !b || !b.relic ? "common" : b.relic === "heal" ? "rare" : "epic"; }
   function boonOffer(run, seed) {
     var r = rng(seed);
     var pool = Object.keys(BOONS).filter(function (id) {
       if (BOONS[id].relic && !(run.relicPool && run.relicPool.indexOf(id) >= 0)) return false;
+      if (BOONS[id].relic === "heal") return false;   // 회복 유물은 따로 셋째 칸
       return !BOONS[id].mod || run.boons.indexOf(id) < 0;
     });
     var a = pickOf(r, pool);
     var rest = pool.filter(function (x) { return x !== a; });
-    return [a, pickOf(r, rest)];
+    var out = [a, pickOf(r, rest)];
+    // 회복 유물 칸 (docs/GROWTH.md 「회복 유물」): 풀에 있고 런에 둘 미만이면 셋째 후보로 하나. 앞 두 칸의 뽑기는 그대로
+    var held = HEAL_RELICS.filter(function (id) { return run.boons.indexOf(id) >= 0; }).length;
+    var hp = HEAL_RELICS.filter(function (id) { return run.relicPool && run.relicPool.indexOf(id) >= 0 && run.boons.indexOf(id) < 0; });
+    if (held < 2 && hp.length) out.push(pickOf(rng((seed ^ 0x5bd1e995) >>> 0), hp));
+    return out;
   }
   function rollEvent(seed) {
     var die = 1 + Math.floor(rng(seed)() * 100);
@@ -809,6 +836,7 @@
   var api = {
     SAVE_KEY: SAVE_KEY, FLOORS: FLOORS, ROOMS: ROOMS, KIND: KIND, PACKS: PACKS, FLOOR_PLAN: FLOOR_PLAN,
     SCALE: SCALE, DIFF: DIFF, DIFF_KEY: DIFF_KEY, diffOf: diffOf, enemyScale: enemyScale, BOONS: BOONS, REST: REST, AFTER: AFTER, EVENT: EVENT,
+    HEAL_RELICS: HEAL_RELICS, RARITY: RARITY, boonRarity: boonRarity,
     STAGES: STAGES, stageOf: stageOf, QUESTS: QUESTS, addQuest: addQuest, floorsOf: floorsOf, openStages: openStages, josa: josa, STAGE_KEY: "fcb-stages-v1",
     newRun: newRun, current: current, battleConfig: battleConfig, applyBattle: applyBattle,
     healAll: healAll, addGauge: addGauge, gainBoon: gainBoon, boonOffer: boonOffer, rollEvent: rollEvent,

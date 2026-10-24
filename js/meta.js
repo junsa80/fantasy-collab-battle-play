@@ -1,5 +1,5 @@
 /* 환상 콜라보 — 상시 명단·성장 저장 (docs/GROWTH.md). DOM 없음, node 시뮬 가능.
-   저장 fcb-meta-v1 = { v:1, unlocked, party, xp, perks, bonds, relics }.
+   저장 fcb-meta-v1 = { v:1, unlocked, party, xp, perks, bonds, relics, gear:{ own, eq, lock } }.
    새 저장(시작 셋, 경험치 0)은 지금 게임과 똑같이 돈다.
 */
 (function (root) {
@@ -12,7 +12,7 @@
   var ORDER = ["arin", "sera", "aria", "garen", "mariel", "leo", "serena", "odette", "noel", "lin", "arthur", "kael"];
 
   function fresh() {
-    return { v: 1, unlocked: STARTERS.slice(), party: STARTERS.slice(), xp: {}, perks: {}, bonds: {}, relics: [] };
+    return { v: 1, unlocked: STARTERS.slice(), party: STARTERS.slice(), xp: {}, perks: {}, bonds: {}, relics: [], gear: { own: [], eq: {}, lock: {} } };
   }
   function sortIds(ids) { return ORDER.filter(function (id) { return ids.indexOf(id) >= 0; }); }
   function normalize(o) {
@@ -24,6 +24,13 @@
     if (o.perks && typeof o.perks === "object") m.perks = o.perks;
     if (o.bonds && typeof o.bonds === "object") m.bonds = o.bonds;
     if (Array.isArray(o.relics)) m.relics = o.relics.slice();
+    if (o.gear && typeof o.gear === "object") {
+      var own = Array.isArray(o.gear.own) ? o.gear.own.filter(function (g, i, a) { return GEAR[g] && a.indexOf(g) === i; }) : [];
+      m.gear = { own: own, eq: {}, lock: {} };
+      var used = {};
+      if (o.gear.eq) Object.keys(o.gear.eq).forEach(function (id) { var g = o.gear.eq[id]; if (C.CAST[id] && own.indexOf(g) >= 0 && !used[g]) { m.gear.eq[id] = g; used[g] = 1; } });
+      if (o.gear.lock) Object.keys(o.gear.lock).forEach(function (id) { if (C.CAST[id] && o.gear.lock[id]) m.gear.lock[id] = 1; });
+    }
     if (validParty(m, o.party)) m.party = o.party.slice();
     if (o.migrated) m.migrated = o.migrated;
     return m;
@@ -127,16 +134,132 @@
   }
   function stats(m, id) { var lv = level(m, id); return statsAt(id, lv, perkKeys(m, id, lv)); }
   // 런 시작 때 찍어 두는 성장 값. Lv1 · 갈림길 없음이면 넣지 않는다 → 새 저장은 null (엔진이 지금과 똑같이 돈다)
+  // 장비를 낀 동료도 넣는다 (HP·공격은 장비 % 를 얹은 값, 회복·게이지는 gx). 장비 없음 = 예전 그대로
   function growthMap(m) {
     var out = null;
     (m.unlocked || []).forEach(function (id) {
-      var st = stats(m, id);
-      if (st.lv <= 1 && !st.perks.length) return;
+      var st = stats(m, id), gid = gearOf(m, id);
+      if (st.lv <= 1 && !st.perks.length && !gid) return;
       var pk = {}; st.perks.forEach(function (k) { pk[k] = 1; });
       out = out || {};
       out[id] = { lv: st.lv, hp: st.hp, atk: st.atk, perks: pk };
+      if (gid) {
+        var fx = GEAR[gid].fx, gx = {};
+        if (fx.hp) out[id].hp = Math.round(st.hp * (1 + fx.hp));
+        if (fx.atk) out[id].atk = Math.round(st.atk * (1 + fx.atk) * 10) / 10;
+        Object.keys(fx).forEach(function (k) { if (k !== "hp" && k !== "atk") gx[k] = fx[k]; });
+        if (Object.keys(gx).length) out[id].gx = gx;
+        out[id].gear = gid;
+      }
     });
     return out;
+  }
+
+  // ---------- ④ 장비 (docs/GEAR.md) ----------
+  // 동료 하나에 한 칸. 장비는 한 벌씩만 (두 동료가 같은 장비를 낄 수 없다).
+  // 「최강」 = 등급 점수(일반 10·희귀 14·영웅 20·유니크 24) + 자리 점수(역할에 맞는가 · 세라 없는 파티면 회복 장비 +6). 점수가 높은 짝부터 한 번씩.
+  // tier 1 일반 · 2 희귀 · 3 영웅 · 4 유니크(한 저장에 한 번, src 에서만). fit = 역할 자리 점수 (없는 역할 = 유니크는 −20 → 안 맞으면 안 낀다)
+  var GEAR = {
+    cord: { name: "붕대 손목끈", tier: 1, heal: 1, fx: { regen: 0.03 }, text: "매 라운드 끝 자기 HP 3% 회복", fit: { tank: 3, dps: 1, support: 1 } },
+    whet: { name: "숫돌 단검", tier: 1, fx: { atk: 0.08 }, text: "공격 +8%", fit: { dps: 4, tank: 1 } },
+    quilt: { name: "누빈 조끼", tier: 1, fx: { hp: 0.08 }, text: "최대 HP +8%", fit: { tank: 3, support: 2, dps: 1, healer: 2 } },
+    gloves: { name: "가죽 장갑", tier: 1, fx: { hp: 0.04, atk: 0.03 }, text: "최대 HP +4% · 공격 +3%", fit: { dps: 2, tank: 2, support: 2, healer: 2 } },
+    bell: { name: "작은 종", tier: 1, fx: { gauge: 10 }, text: "전투 시작 필살 게이지 +10", fit: { support: 3, healer: 3, dps: 1 } },
+    fangring: { name: "송곳니 반지", tier: 2, heal: 1, fx: { leech: 0.08 }, text: "준 피해 8%만큼 자기 회복", fit: { dps: 4, tank: 1 } },
+    charm: { name: "사냥꾼 부적", tier: 2, heal: 1, fx: { killHeal: 0.12 }, text: "적을 쓰러뜨리면 자기 HP 12% 회복", fit: { dps: 4, tank: 1 } },
+    buckler: { name: "성문 버클러", tier: 2, heal: 1, fx: { hp: 0.05, guardHeal: 0.1 }, text: "최대 HP +5% · 방어하면 자기 HP 10% 회복", fit: { tank: 5, support: 1 } },
+    quill: { name: "기록관 깃펜", tier: 2, fx: { gauge: 20 }, text: "전투 시작 필살 게이지 +20", fit: { support: 4, healer: 4, dps: 2 } },
+    moonblade: { name: "달빛 검", tier: 2, fx: { atk: 0.11 }, text: "공격 +11%", fit: { dps: 4, tank: 1 } },
+    oath: { name: "피의 맹세 팔찌", tier: 2, fx: { low: 1.3, hp: 0.04 }, text: "최대 HP +4% · HP 40% 이하면 공격 ×1.3", fit: { dps: 3, tank: 3 } },
+    brooch: { name: "장미 브로치", tier: 3, heal: 1, fx: { ultAll: 0.05, gauge: 10 }, text: "필살기 때 아군 전원 HP 5% 회복 · 시작 게이지 +10", fit: { support: 4, healer: 1, dps: 2, tank: 2 } },
+    mantle: { name: "룬 이끼 망토", tier: 3, heal: 1, fx: { hp: 0.05, regenLow: 0.02 }, text: "최대 HP +5% · 매 라운드 끝 가장 다친 아군 HP 2% 회복", fit: { tank: 3, support: 2, dps: 1 } },
+    epaulet: { name: "새벽 견장", tier: 3, fx: { hp: 0.05, atk: 0.05 }, text: "최대 HP +5% · 공격 +5%", fit: { dps: 2, tank: 2, support: 2, healer: 2 } },
+    compass: { name: "균열 나침반", tier: 3, heal: 1, fx: { killAll: 0.03, atk: 0.03 }, text: "적을 쓰러뜨리면 아군 전원 HP 3% 회복 · 공격 +3%", fit: { dps: 4, tank: 1 } },
+    // 유니크 ◆ — 강하지만 대가가 있다. 나온 곳에서 딱 한 번
+    article18: { name: "제18조 원본", tier: 4, src: "q1", world: "deck", fx: { ultGauge: 20, ultAll: 0.07, atk: -0.05 }, text: "필살기를 쓰면 다른 아군 게이지 +20 · 아군 전원 HP 7% 회복 · 공격 −5%", heal: 1, fit: { support: 6, healer: 5 } },
+    lastqueen: { name: "여왕의 마지막 패", tier: 4, src: "q2", world: "deck", fx: { killGauge: 25, killHeal: 0.1, atk: 0.05 }, text: "적을 쓰러뜨리면 자기 게이지 +25 · HP 10% 회복 · 공격 +5%", heal: 1, fit: { dps: 6 } },
+    ledger: { name: "칸 값 장부", tier: 4, src: "q3", world: "rune", heal: 1, fx: { regenLow: 0.03, atk: -0.15 }, text: "매 라운드 끝 가장 다친 아군 HP 3% 회복 · 공격 −15%", fit: { support: 6, tank: 3 } },
+    hartmann: { name: "하르트만 장부", tier: 4, src: "q4", world: "ashen", fx: { gauge: 50, hp: 0.12, atk: -0.05 }, text: "전투 시작 필살 게이지 +50 · 최대 HP +12% · 공격 −5%", fit: { tank: 5, support: 3 } },
+    crown: { name: "무너진 왕관", tier: 4, src: "stage5", world: "ashen", heal: 1, fx: { low: 1.35, leech: 0.1 }, text: "HP 40% 이하면 공격 ×1.35 · 준 피해 10% 회복", fit: { dps: 4, tank: 5 } },
+    grail: { name: "성녀의 성배", tier: 4, src: "hard", world: "ashen", heal: 1, fx: { guardAll: 0.07, regen: 0.03, atk: -0.08 }, text: "방어하면 아군 전원 HP 7% · 매 라운드 끝 자기 HP 3% 회복 · 공격 −8%", fit: { tank: 6, healer: 3 } },
+  };
+  var RARITY = ["", "일반", "희귀", "영웅", "유니크"];
+  var PW = [0, 10, 14, 20, 24];   // 자동 장착 등급 점수 (유니크는 맞는 역할에서만 최고)
+  var SRC_TEXT = { q1: "의뢰 「제18조」 첫 완료", q2: "의뢰 「마지막 패」 첫 완료", q3: "의뢰 「칸 값」 첫 완료", q4: "의뢰 「두 권의 장부」 첫 완료", stage5: "5 · 왕좌 너머 첫 클리어", hard: "하드 첫 클리어 (아무 스테이지)" };
+  // 랜덤 전리품: 출처마다 확률 · 등급 가중치 (일반·희귀·영웅). 유니크는 랜덤에 안 나온다
+  var DROP = {
+    battle: { p: 0.15, w: [0, 80, 20, 0] },
+    treasure: { p: 0.35, w: [0, 60, 35, 5] },
+    elite: { p: 1, w: [0, 50, 40, 10] },
+    boss: { p: 1, w: [0, 0, 50, 50] },
+    quest: { p: 1, w: [0, 0, 40, 60] },
+  };
+  var DROP_TEXT = { 1: "일반 전투 15% · 보물 35% · 강적", 2: "강적 · 보스 · 보물 · 의뢰", 3: "보스 · 의뢰 · 강적 10% · 보물 5%" };
+  var GEAR_LIST = Object.keys(GEAR);
+  var ROLE = { arin: "dps", sera: "healer", aria: "dps", garen: "tank", mariel: "dps", leo: "dps", serena: "dps", odette: "support", noel: "support", lin: "dps", arthur: "tank", kael: "tank" };
+  var ROLE_NAME = { dps: "공격", tank: "방패", support: "보조", healer: "치유" };
+  function gearSave(m) { if (!m.gear || typeof m.gear !== "object") m.gear = { own: [], eq: {}, lock: {} }; m.gear.own = m.gear.own || []; m.gear.eq = m.gear.eq || {}; m.gear.lock = m.gear.lock || {}; return m.gear; }
+  function gearOf(m, id) { var g = m.gear && m.gear.eq && m.gear.eq[id]; return g && GEAR[g] ? g : null; }
+  function stars(gid) { return GEAR[gid].tier === 4 ? "◆" : "★★★".slice(0, GEAR[gid].tier); }
+  function rarity(gid) { return RARITY[GEAR[gid].tier]; }
+  function whereText(gid) { var G = GEAR[gid]; return G.tier === 4 ? SRC_TEXT[G.src] + " · 한 번만" : DROP_TEXT[G.tier]; }
+  function gearScore(gid, id, party) {
+    var G = GEAR[gid], r = ROLE[id] || "dps";
+    var sc = PW[G.tier] + (G.fit[r] != null ? G.fit[r] : G.tier === 4 ? -20 : 0);
+    if (G.heal) sc += party.indexOf("sera") >= 0 ? (id === "sera" ? -3 : 0) : 6;
+    return sc;
+  }
+  function wearer(m, gid) { var eq = gearSave(m).eq; return Object.keys(eq).filter(function (id) { return eq[id] === gid; })[0] || null; }
+  // 자동 장착: 파티 셋에 가진 장비 중 점수 높은 짝부터. 직접 고른(잠금) 칸은 둔다. 쉬는 동료가 낀 것도 가져온다.
+  function autoEquip(m, party, opts) {
+    var gs = gearSave(m), before = {};
+    party.forEach(function (id) { before[id] = gs.eq[id] || null; });
+    if (opts && opts.reset) party.forEach(function (id) { delete gs.lock[id]; });
+    var keep = {}, used = {};
+    party.forEach(function (id) { if (gs.lock[id]) { keep[id] = 1; if (gs.eq[id]) used[gs.eq[id]] = 1; } });
+    party.forEach(function (id) { if (!keep[id]) delete gs.eq[id]; });
+    var pairs = [];
+    gs.own.forEach(function (gid, gi) {
+      if (used[gid]) return;
+      party.forEach(function (id, pi) { if (!keep[id]) pairs.push({ g: gid, id: id, sc: gearScore(gid, id, party), o: gi * 10 + pi }); });
+    });
+    pairs.sort(function (a, b) { return b.sc - a.sc || a.o - b.o; });
+    pairs.forEach(function (p) {
+      if (used[p.g] || gs.eq[p.id] || keep[p.id]) return;
+      var w = wearer(m, p.g); if (w && party.indexOf(w) < 0) delete gs.eq[w];
+      gs.eq[p.id] = p.g; used[p.g] = 1;
+    });
+    return party.map(function (id) { return { id: id, from: before[id], to: gs.eq[id] || null }; });
+  }
+  // 직접 끼우기 (gid null = 빼기). 그 칸은 잠근다 — 자동 장착이 건드리지 않는다
+  function equip(m, id, gid) {
+    var gs = gearSave(m);
+    if (!C.CAST[id] || (gid && gs.own.indexOf(gid) < 0)) return false;
+    if (gid) { var w = wearer(m, gid); if (w) delete gs.eq[w]; gs.eq[id] = gid; } else delete gs.eq[id];
+    gs.lock[id] = 1;
+    return true;
+  }
+  // 랜덤 전리품 (DROP): 확률 → 등급 가중치 → 그 등급의 안 가진 것. 그 등급을 다 가졌으면 다른 등급, 다 가졌으면 null
+  function rnd(seed) { var x = ((seed >>> 0) * 2654435761 + 0x9e3779b9) >>> 0; x ^= x >>> 15; x = Math.imul(x, 0x85ebca6b) >>> 0; x ^= x >>> 13; return (x >>> 0) / 4294967296; }
+  function dropGear(m, seed, src) {
+    var gs = gearSave(m), D = DROP[src]; if (!D) return null;
+    if (rnd(seed) >= D.p) return null;
+    var left = function (t) { return GEAR_LIST.filter(function (g) { return GEAR[g].tier === t && gs.own.indexOf(g) < 0; }); };
+    var tot = 0, ws = D.w.map(function (w, t) { var v = left(t).length ? w : 0; tot += v; return v; });
+    var tier = 0;
+    if (tot > 0) { var r = rnd(seed + 1) * tot; for (var t = 1; t < 4; t++) { r -= ws[t]; if (r < 0) { tier = t; break; } } if (!tier) tier = 3; }
+    else { for (var t2 = 1; t2 < 4 && !tier; t2++) if (left(t2).length && D.w.some(function (w) { return w > 0; })) tier = t2; }
+    if (!tier) return null;
+    var pool = left(tier), gid = pool[Math.floor(rnd(seed + 2) * pool.length)];
+    gs.own.push(gid);
+    return gid;
+  }
+  // 유니크: 그 출처에서 처음 한 번. 이미 가졌으면 null
+  function grantUnique(m, src) {
+    var gs = gearSave(m), gid = GEAR_LIST.filter(function (g) { return GEAR[g].tier === 4 && GEAR[g].src === src; })[0];
+    if (!gid || gs.own.indexOf(gid) >= 0) return null;
+    gs.own.push(gid);
+    return gid;
   }
   // 런 경험치: 지난 층 × 10 + 승리 20, 하드 ×1.5. 명단 전부, 명단 밖 해금 동료 30%
   function runXp(run) {
@@ -259,7 +382,8 @@
   var api = { KEY: KEY, STARTERS: STARTERS, ORDER: ORDER, fresh: fresh, normalize: normalize, unlock: unlock, migrate: migrate, validParty: validParty, defaultParty: defaultParty,
     MAX_LV: MAX_LV, THRESH: THRESH, XP: XP, PER_LV: PER_LV, PERK: PERK, PICKS: PICKS, PERK_LV: PERK_LV,
     xpOf: xpOf, level: level, levelOfXp: levelOfXp, perkKeys: perkKeys, pending: pending, choosePerk: choosePerk, stats: stats, statsAt: statsAt, growthMap: growthMap, runXp: runXp, addXp: addXp, award: award, nextAt: nextAt,
-    BOND_LV: BOND_LV, BOND_XP: BOND_XP, MIRROR_XP: MIRROR_XP, BONDS: BONDS, bondNext: bondNext, hearBond: hearBond, RELIC_LV: RELIC_LV, RELIC_OF: RELIC_OF, relicsOf: relicsOf };
+    BOND_LV: BOND_LV, BOND_XP: BOND_XP, MIRROR_XP: MIRROR_XP, BONDS: BONDS, bondNext: bondNext, hearBond: hearBond, RELIC_LV: RELIC_LV, RELIC_OF: RELIC_OF, relicsOf: relicsOf,
+    GEAR: GEAR, GEAR_LIST: GEAR_LIST, ROLE: ROLE, ROLE_NAME: ROLE_NAME, gearOf: gearOf, gearScore: gearScore, stars: stars, autoEquip: autoEquip, equip: equip, dropGear: dropGear, grantUnique: grantUnique, wearer: wearer, DROP: DROP, RARITY: RARITY, rarity: rarity, whereText: whereText, SRC_TEXT: SRC_TEXT };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.FCBMeta = api;
 })(this);

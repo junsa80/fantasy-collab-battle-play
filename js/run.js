@@ -183,7 +183,7 @@
       body.innerHTML = '<p class="room-msg">' + esc(p.msg || "하나를 고르세요.") + "</p>";
       p.reward.forEach(function (id, j) {
         var b = R.BOONS[id];
-        acts.appendChild(btn(b.name, b.text, j === 0 ? "primary" : "", function () { takeBoon(id); }, "boon-" + j));
+        acts.appendChild(btn((b.relic === "heal" ? (b.util ? "✦ " : "💚 ") : "") + b.name, b.text, j === 0 ? "primary" : b.relic === "heal" ? "heal-relic" : "", function () { takeBoon(id); }, "boon-" + j));
       });
       acts.appendChild(btn("그냥 간다", "받지 않고 다음 층", "ghost", function () { nextFloor(); }, "btn-skip"));
     } else if (p.won) {
@@ -264,7 +264,8 @@
       }, "rest-talk"));
     } else if (node.kind === "treasure") {
       p.reward = R.boonOffer(run, run.seed * 31 + run.floor);
-      p.msg = "룬 상자가 열렸다. 하나만 챙길 수 있다.";
+      var gt = gearDrop("treasure", run.seed * 23 + run.floor);
+      p.msg = "룬 상자가 열렸다. 하나만 챙길 수 있다." + gearMsg(gt);
       save(); return showNode();
     } else if (node.kind === "event" && p.mirror) {
       // 균열 거울 (해금 동료 넷 이상): 명단 한 명 경험치 +20 · 전원 게이지 +15
@@ -354,8 +355,9 @@
         var msg = "승리! 라운드 " + S.round + (downs ? " · 쓰러진 아군은 HP " + Math.round(R.AFTER.reviveHp * 100) + "%로 일어났다" : "") + " · 필살 게이지는 절반만 이어진다.";
         if (node.kind === "elite") {
           p.reward = R.boonOffer(run, run.seed * 7 + run.floor);
-          p.msg = msg + " 강적의 전리품을 고르세요.";
-        } else { p.won = true; p.msg = msg; }
+          var gd = gearDrop("elite", run.seed * 13 + run.floor);
+          p.msg = msg + gearMsg(gd) + " 강적의 전리품을 고르세요.";
+        } else { var gb = gearDrop("battle", run.seed * 11 + run.floor); p.won = true; p.msg = msg + gearMsg(gb); }
         delete p.roll; delete p.ambush;
         save(); showNode();
       },
@@ -403,6 +405,15 @@
     run.over = run.over || "lose";
     // 성장: 런마다 한 번 (져도). 새 저장도 경험치는 쌓인다
     if (!run.awarded) {
+      if (win) {
+        // 전리품: 유니크(처음 한 번) + 랜덤 하나
+        var gl = [];
+        if (run.quest && qres && qres.first) gl.push(gearDrop("unique:" + run.quest));
+        if (!run.quest && sg.no === 5 && !hard) gl.push(gearDrop("unique:stage5"));
+        if (hard) gl.push(gearDrop("unique:hard"));
+        gl.push(gearDrop(run.quest ? "quest" : "boss", run.seed * 19 + 7));
+        run.gearRes = gl.filter(Boolean);
+      }
       var mm = loadMeta();
       run.growRes = M.award(mm, run);
       run.awarded = 1;
@@ -442,6 +453,10 @@
           ? "<span>Lv" + r.from.lv + " → <em>Lv" + r.to.lv + "</em></span><small>HP " + r.from.hp + " → " + r.to.hp + " · 공격 " + fmtAtk(r.from.atk) + " → " + fmtAtk(r.to.atk) + "</small>"
           : "<span>Lv" + r.to.lv + " +" + r.gain + "</span><small>" + (nx ? "다음 Lv까지 " + (nx - r.xp) : "최대 레벨") + "</small>") +
         "</div>";
+    });
+    var grs = run.gearRes ? [].concat(run.gearRes).filter(function (g) { return M.GEAR[g]; }) : [];
+    grs.forEach(function (g, i) {
+      h += '<div class="rg-gear r' + M.GEAR[g].tier + '" id="rg-gear' + (i ? "-" + i : "") + '">' + (M.GEAR[g].tier === 4 ? "◆ 유니크 장비" : "🎒 " + M.rarity(g) + " 장비") + " 「" + esc(M.GEAR[g].name) + "」 " + (M.GEAR[g].tier < 4 ? M.stars(g) + " " : "") + "· " + esc(M.GEAR[g].text) + " — 자동 장착</div>";
     });
     if (res.relics && res.relics.length) h += '<div class="rg-relic">유물 해금 · ' + res.relics.map(function (id) { return esc(R.BOONS[id].name.replace("유물 · ", "")); }).join(" · ") + " — 보물 고르기에 섞인다</div>";
     var pend = null;
@@ -496,6 +511,9 @@
       : Q.LIST.some(function (id) { return Q.state(qs, mq, id) !== "locked"; }) ? "클리어 " + prog + "/" + Q.LIST.length : "동료를 영입하면 단서가 열린다";
     var qb = btn("📜 동료 의뢰", qsub, "stage quest" + (leads ? " new" : ""), showQuests, "btn-quests");
     list.appendChild(qb);
+    var gm = loadMeta(), gown = gm.gear ? gm.gear.own.length : 0;
+    var gb = btn("🎒 장비", gown ? "가진 장비 " + gown + "/" + M.GEAR_LIST.length + " · 자동 장착" : "강적·보스를 이기면 장비가 나온다", "stage gear", function () { showGear("title"); }, "btn-gear");
+    list.appendChild(gb);
     var d = loadDiff();
     $("#btn-diff-normal").setAttribute("aria-pressed", d === "normal" ? "true" : "false");
     $("#btn-diff-hard").setAttribute("aria-pressed", d === "hard" ? "true" : "false");
@@ -584,6 +602,15 @@
     newRun(pick.stage, pick.ids.slice());
   }
 
+  // 회복 유물 (docs/GROWTH.md): 첫 영입(해금 넷) 뒤부터 보물·강적·카드 보상에 셋째 칸으로
+  function healRelics(m) { return m.unlocked.length > 3 ? R.HEAL_RELICS.slice() : []; }
+  // 런 시작 = 자동 장착 (직접 고른 칸은 둔다). 장비가 없으면 아무것도 안 한다
+  function gearAuto(m, party) {
+    if (!party || !m.gear || !m.gear.own.length) return null;
+    var d = M.autoEquip(m, party);
+    saveMeta(m);
+    return d;
+  }
   function newRun(stageNo, party) {
     // 목록에서 새로 시작 = 타이틀에서 고른 난이도. 다시 하기(번호 없음) = 그 런의 난이도·시작 셋
     var diff = typeof stageNo === "number" || typeof stageNo === "string" ? loadDiff() : R.diffOf(run);
@@ -595,7 +622,8 @@
       var mq = loadMeta(), qs = loadQuest();
       if (Q.state(qs, mq, qid) === "locked" || !party || !Q.partyOk(qid, party)) { updateTitle(); return showQuests(); }
       var seedq = A.hash.seed != null ? Number(A.hash.seed) : undefined;
-      run = R.newRun(seedq, qid, diff, party, M.growthMap(mq), { relics: M.relicsOf(mq).concat(Q.relics(qs)), variant: false, mirror: mq.unlocked.length > 3 });
+      gearAuto(mq, party);
+      run = R.newRun(seedq, qid, diff, party, M.growthMap(mq), { relics: M.relicsOf(mq).concat(Q.relics(qs), healRelics(mq)), variant: false, mirror: mq.unlocked.length > 3 });
       save();
       return showMap();
     }
@@ -604,7 +632,8 @@
     var rec = loadStages(); rec.last = stageNo; saveStages(rec);
     var seed = A.hash.seed != null ? Number(A.hash.seed) : undefined;
     var mt = loadMeta(), sr = loadStages();
-    var extra = { relics: M.relicsOf(mt).concat(Q.relics(loadQuest())), variant: !!((sr.clears && sr.clears[stageNo]) || (sr.hard && sr.hard[stageNo])), mirror: mt.unlocked.length > 3 };
+    gearAuto(mt, party || M.defaultParty(mt));
+    var extra = { relics: M.relicsOf(mt).concat(Q.relics(loadQuest()), healRelics(mt)), variant: !!((sr.clears && sr.clears[stageNo]) || (sr.hard && sr.hard[stageNo])), mirror: mt.unlocked.length > 3 };
     run = R.newRun(seed, stageNo, diff, party, M.growthMap(mt), extra);
     save();
     showMap();
@@ -665,6 +694,114 @@
     acts.appendChild(btn("의뢰 목록", "", "ghost", showQuests, "btn-quest-list"));
     A.show("scr-quest");
   }
+  // ---------- 장비 (docs/GEAR.md) ----------
+  // 전리품 하나 → 저장 · 늘 쓰는 셋(진행 중이면 그 런의 시작 셋)에 자동 장착
+  function gearDrop(src, seed) {
+    var mm = loadMeta(), gid = src.indexOf("unique:") === 0 ? M.grantUnique(mm, src.slice(7)) : M.dropGear(mm, seed >>> 0, src);
+    if (!gid) return null;
+    M.autoEquip(mm, run && run.start && M.validParty(mm, run.start) ? run.start : M.defaultParty(mm));
+    saveMeta(mm);
+    return gid;
+  }
+  function gearMsg(g) { return g ? " 🎒 " + M.rarity(g) + " 장비 「" + M.GEAR[g].name + "」 " + M.stars(g) + " — 자동 장착 · 다음 런부터." : ""; }
+  var gearView = null;   // { from, party, sel, diff }
+  function gearStat(m, id, gid) {
+    var st = M.stats(m, id), fx = gid ? M.GEAR[gid].fx : {};
+    return { hp: fx.hp ? Math.round(st.hp * (1 + fx.hp)) : st.hp, atk: fx.atk ? Math.round(st.atk * (1 + fx.atk) * 10) / 10 : st.atk };
+  }
+  function showGear(from) {
+    leaveScene();
+    var m = loadMeta();
+    if (from) {
+      var party = pick && pick.ids.length === 3 && from === "party" ? pick.ids.slice() : M.defaultParty(m);
+      gearView = { from: from, party: party, sel: party[0], diff: null };
+    }
+    var gv = gearView, gs = m.gear;
+    $("#gear-sub").textContent = "가진 장비 " + gs.own.length + "/" + M.GEAR_LIST.length + " · 한 동료에 하나";
+    var sl = $("#gear-slots"); sl.innerHTML = "";
+    gv.party.forEach(function (id) {
+      var gid = M.gearOf(m, id), a = gearStat(m, id, gid), b = document.createElement("button");
+      b.type = "button"; b.id = "gs-" + id; b.className = "gslot" + (gv.sel === id ? " sel" : "");
+      b.innerHTML = face(id) + '<span class="gs-t"><b>' + esc(C.CAST[id].name) + "<em>" + M.ROLE_NAME[M.ROLE[id]] + (gs.lock[id] ? " · 직접 고름" : "") + "</em></b>" +
+        '<small class="gs-g' + (gid ? "" : " none") + '">' + (gid ? M.stars(gid) + " " + esc(M.GEAR[gid].name) : "빈 칸") + "</small>" +
+        "<small>" + (gid ? esc(M.GEAR[gid].text) + " · " : "") + "HP " + a.hp + " · 공격 " + fmtAtk(a.atk) + "</small></span>";
+      b.addEventListener("click", function () { gv.sel = id; gv.diff = null; showGear(); });
+      sl.appendChild(b);
+    });
+    var df = $("#gear-diff");
+    if (gv.diff) {
+      df.innerHTML = "<b>⚙ 자동 장착 결과</b>" + gv.diff.map(function (d) {
+        var A0 = gearStat(m, d.id, d.from), A1 = gearStat(m, d.id, d.to);
+        return "<div>" + esc(C.CAST[d.id].name) + ": " + (d.from ? esc(M.GEAR[d.from].name) : "빈 칸") + " → " + (d.to ? esc(M.GEAR[d.to].name) : "빈 칸") +
+          (d.from === d.to ? " (그대로)" : " · HP " + A0.hp + "→" + A1.hp + " · 공격 " + fmtAtk(A0.atk) + "→" + fmtAtk(A1.atk)) + "</div>";
+      }).join("");
+      df.hidden = false;
+    } else df.hidden = true;
+    var gl = $("#gear-list"); gl.innerHTML = "";
+    if (!gs.own.length) gl.innerHTML = '<div class="gear-empty">아직 장비가 없다.<br>강적(★1–2)·보스(★2–3)를 이기거나 의뢰를 처음 끝내면(★3) 하나씩 나온다.<br>얻으면 자동으로 낀다.</div>';
+    var sorted = gs.own.slice().sort(function (x, y) { return M.gearScore(y, gv.sel, gv.party) - M.gearScore(x, gv.sel, gv.party); });
+    sorted.forEach(function (gid) {
+      var G = M.GEAR[gid], w = M.wearer(m, gid), on = w === gv.sel, b = document.createElement("button");
+      b.type = "button"; b.id = "gi-" + gid; b.className = "gitem t" + G.tier + (G.heal ? " heal" : "") + (on ? " on" : "");
+      b.innerHTML = '<b><span class="st">' + M.stars(gid) + "</span>" + esc(G.name) + "<em>" + M.rarity(gid) + (w ? " · " : "") + "</em><em>" + (w ? esc(C.CAST[w].name) + " 착용" + (on ? " · 누르면 뺀다" : "") : "") + "</em></b><small>" + esc(G.text) + "</small>";
+      b.addEventListener("click", function () {
+        var mm = loadMeta();
+        if (M.equip(mm, gv.sel, on ? null : gid)) { saveMeta(mm); if (SND) SND.sfx("click"); }
+        gv.diff = null; showGear();
+      });
+      gl.appendChild(b);
+    });
+    A.show("scr-gear");
+  }
+  // ---------- 도감 ----------
+  var codexTab = "gear";
+  function relicWhere(id, m) {
+    var b = R.BOONS[id], rr = R.boonRarity(id);
+    if (rr === "common") return "보물·강적·카드 보상 두 칸 (늘)";
+    if (rr === "rare") return "첫 영입 뒤 · 보물·강적·카드 보상 셋째 칸 (런에 둘까지)";
+    if (b.relic === "quest") { var q = Q.LIST.filter(function (k) { return Q.QUESTS[k].reward.relic === id; })[0]; return "의뢰 「" + Q.QUESTS[q].name + "」 첫 완료 → 보물 고르기에 섞인다"; }
+    return C.ORIGINS[b.relic].name + " 동료 Lv" + M.RELIC_LV + " → 보물 고르기에 섞인다";
+  }
+  function showCodex(tab) {
+    leaveScene();
+    if (tab) codexTab = tab;
+    var m = loadMeta(), box = $("#codex-list"), h = "";
+    $("#cx-tab-gear").setAttribute("aria-pressed", codexTab === "gear" ? "true" : "false");
+    $("#cx-tab-relic").setAttribute("aria-pressed", codexTab === "relic" ? "true" : "false");
+    if (codexTab === "gear") {
+      var own = m.gear.own;
+      $("#codex-sub").textContent = "장비 " + own.length + "/" + M.GEAR_LIST.length + " · 유니크 " + own.filter(function (g) { return M.GEAR[g].tier === 4; }).length + "/" + M.GEAR_LIST.filter(function (g) { return M.GEAR[g].tier === 4; }).length;
+      [4, 3, 2, 1].forEach(function (t) {
+        h += '<div class="cx-h">' + (t === 4 ? "◆ " : "★★★".slice(0, t) + " ") + M.RARITY[t] + (t === 4 ? " — 한 저장에 한 번" : " — 랜덤 전리품") + "</div>";
+        M.GEAR_LIST.filter(function (g) { return M.GEAR[g].tier === t; }).forEach(function (g) {
+          var G = M.GEAR[g], has = own.indexOf(g) >= 0, w = has ? M.wearer(m, g) : null;
+          h += '<div class="cx t' + t + (has ? "" : " no") + '" id="cx-' + g + '"><b>' + (has ? esc(G.name) : "???") + "<em>" + M.RARITY[t] + (w ? " · " + esc(C.CAST[w].name) + " 착용" : has ? " · 가짐" : "") + "</em></b>" +
+            "<small>" + (has ? esc(G.text) : t === 4 ? "대가가 있는 강한 장비" + (G.world ? " · " + esc(C.ORIGINS[G.world].name) : "") : "아직 못 얻었다") + "</small>" +
+            '<small class="cx-w">얻는 곳: ' + esc(M.whereText(g)) + "</small></div>";
+        });
+      });
+    } else {
+      var pool = M.relicsOf(m).concat(Q.relics(loadQuest()), healRelics(m)), ids = Object.keys(R.BOONS);
+      $("#codex-sub").textContent = "유물 · 전술 " + ids.filter(function (id) { return !R.BOONS[id].relic || pool.indexOf(id) >= 0; }).length + "/" + ids.length + " 열림 · 런마다 새로";
+      ["epic", "rare", "common"].forEach(function (rr) {
+        h += '<div class="cx-h">' + R.RARITY[rr] + (rr === "common" ? " — 기본 전술" : rr === "rare" ? " — 셋째 칸 유물" : " — 세계·의뢰 유물") + "</div>";
+        ids.filter(function (id) { return R.boonRarity(id) === rr; }).forEach(function (id) {
+          var b = R.BOONS[id], open = !b.relic || pool.indexOf(id) >= 0, t = rr === "epic" ? 3 : rr === "rare" ? 2 : 1;
+          h += '<div class="cx t' + t + (open ? "" : " no") + '" id="cx-' + id + '"><b>' + (open ? esc(b.name.replace("유물 · ", "")) : "???") + "<em>" + R.RARITY[rr] + (open ? " · 열림" : "") + "</em></b>" +
+            "<small>" + (open ? esc(b.text) : "아직 잠김") + '</small><small class="cx-w">얻는 곳: ' + esc(relicWhere(id, m)) + "</small></div>";
+        });
+      });
+    }
+    box.innerHTML = h; box.scrollTop = 0;
+    A.show("scr-codex");
+  }
+  function gearAutoBtn() {
+    var m = loadMeta();
+    gearView.diff = M.autoEquip(m, gearView.party, { reset: true });
+    saveMeta(m);
+    if (SND) SND.sfx("click");
+    showGear();
+  }
   function openMenu() { $("#pause").hidden = false; }
   function $$snd() { return Array.prototype.slice.call(document.querySelectorAll(".btn-snd")); }
 
@@ -672,6 +809,13 @@
     $("#btn-continue").addEventListener("click", cont);
     $("#btn-party-go").addEventListener("click", partyGo);
     $("#btn-party-back").addEventListener("click", function () { var wasQ = pick && pick.quest; pick = null; updateTitle(); if (wasQ) return showQuest(wasQ); A.show("scr-title"); });
+    $("#btn-party-gear").addEventListener("click", function () { showGear("party"); });
+    $("#btn-gear-auto").addEventListener("click", gearAutoBtn);
+    $("#btn-gear-codex").addEventListener("click", function () { showCodex("gear"); });
+    $("#cx-tab-gear").addEventListener("click", function () { showCodex("gear"); });
+    $("#cx-tab-relic").addEventListener("click", function () { showCodex("relic"); });
+    $("#btn-codex-back").addEventListener("click", function () { showGear(); });
+    $("#btn-gear-back").addEventListener("click", function () { if (gearView && gearView.from === "party" && pick) return showParty(); updateTitle(); A.show("scr-title"); });
     $("#btn-quest-back").addEventListener("click", function () { updateTitle(); A.show("scr-title"); });
     $("#btn-diff-normal").addEventListener("click", function () { saveDiff("normal"); updateTitle(); });
     $("#btn-diff-hard").addEventListener("click", function () { saveDiff("hard"); updateTitle(); });
@@ -699,6 +843,7 @@
       get run() { return run; }, R: R, newRun: newRun, cont: cont, showMap: showMap, showNode: showNode, enterNode: enterNode,
       result: result, save: save, loadSave: loadSave, battle: false, loadStages: loadStages, updateTitle: updateTitle, loadDiff: loadDiff, loadMeta: loadMeta, saveMeta: saveMeta, startStage: startStage, M: M,
       Q: Q, loadQuest: loadQuest, saveQuest: saveQuest, showQuests: showQuests, showQuest: showQuest, startQuest: startQuest,
+      showGear: showGear, gearDrop: gearDrop, showCodex: showCodex,
     };
   }
   init();
