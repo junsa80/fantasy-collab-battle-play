@@ -422,3 +422,20 @@ body[data-stage="4"] #scr-map, body[data-stage="4"] #scr-node, body[data-stage="
 body[data-stage="5"] #scr-map, body[data-stage="5"] #scr-node, body[data-stage="5"] #scr-battle {
   background: linear-gradient(180deg, rgba(11,15,24,.55) 0%, rgba(11,15,24,.78) 45%, rgba(11,15,24,.92) 100%), url("../img/stage5.webp") center top / cover no-repeat;
 }
+
+/* ---------- 출전 고르기 (docs/GROWTH.md) ---------- */
+.party-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.pcard {
+  position: relative; min-height: 84px; padding: 6px 2px 4px; border: 2px solid var(--line); border-radius: 12px;
+  background: var(--panel); display: flex; flex-direction: column; align-items: center; gap: 2px; cursor: pointer; font-size: 13px;
+}
+.pcard img { width: 46px; height: 46px; border-radius: 10px; object-fit: cover; object-position: 50% 20%; background: #0a0d14; }
+.pcard b { font-size: 13px; line-height: 1.1; }
+.pcard small { font-size: 12px; color: var(--muted); line-height: 1.1; }
+.pcard.on { border-color: var(--c); background: var(--panel2); box-shadow: 0 0 0 1px var(--c) inset; }
+.pcard .ord { position: absolute; top: 2px; left: 4px; font-size: 12px; font-weight: 800; color: #1a1206; background: var(--gold); border-radius: 99px; min-width: 18px; text-align: center; }
+.pcard.look { outline: 2px dashed rgba(255,255,255,.35); outline-offset: 1px; }
+.party-info { flex: 1; min-height: 0; overflow: hidden; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 8px 12px; font-size: 13px; color: var(--muted); display: grid; align-content: start; gap: 3px; }
+.party-info b { color: var(--text); font-size: 15px; }
+.party-info .pi-row span { color: var(--text); font-weight: 700; }
+.party-actions { display: grid; gap: 8px; }

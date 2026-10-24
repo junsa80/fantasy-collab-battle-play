@@ -109,6 +109,19 @@
     </section>
 
     <!-- 결과 -->
+    <!-- 출전 고르기 (docs/GROWTH.md ①) -->
+    <section id="scr-party" class="screen" aria-label="출전 고르기">
+      <header class="topbar">
+        <div class="tb-wave"><b id="party-stage">스테이지</b><span id="party-sub">출전 셋을 고르세요</span></div>
+      </header>
+      <div class="party-grid" id="party-grid"></div>
+      <div class="party-info" id="party-info"></div>
+      <div class="party-actions">
+        <button type="button" class="btn primary big" id="btn-party-go">이 셋으로 출발</button>
+        <button type="button" class="btn ghost" id="btn-party-back">타이틀로</button>
+      </div>
+    </section>
+
     <section id="scr-result" class="screen" aria-label="결과">
       <div class="result-box">
         <img id="res-img" class="res-img" src="img/arin.png" alt="" />
@@ -152,6 +165,7 @@
   <script src="js/arena-core.js"></script>
   <script src="js/arena.js"></script>
   <script src="js/run-core.js"></script>
+  <script src="js/meta.js"></script>
   <script src="js/run.js"></script>
 </body>
 </html>

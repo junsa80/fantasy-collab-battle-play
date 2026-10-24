@@ -5,7 +5,7 @@
 */
 (function () {
   "use strict";
-  var C = window.FCBCore, R = window.FCBRun, A = window.__fcb, SND = window.FCBSound;
+  var C = window.FCBCore, R = window.FCBRun, A = window.__fcb, SND = window.FCBSound, M = window.FCBMeta;
   var $ = function (s, el) { return (el || document).querySelector(s); };
   var esc = A.esc;
   var run = null;
@@ -35,7 +35,7 @@
     rest: function () { return "우물 HP 50% 회복 또는 명상 게이지 +40"; },
     treasure: function () { return "보물·전술 둘 중 하나"; },
     event: function () { return "균열 주사위: 보물 또는 기습"; },
-    meet: function (n) { return C.CAST[n.who].name + " · 데려가면 한 명이 쉰다"; },
+    meet: function (n) { return C.CAST[n.who].name + (run && R.meetKnown(run, n.who) ? " · 이미 함께 · 보물" : " · 데려가면 한 명이 쉰다"); },
     // 559c57e 에서 빠져 6층 지도가 멈추던 것 복구 (26b428e 문구: 셀레스 · 서리 늑대)
     boss: function (n) { return n.pack.slice().reverse().map(function (id) { return C.ENEMY[id].name; }).join(" · "); },
   };
@@ -92,6 +92,18 @@
     return { v: 1, clears: {}, last: 1 };
   }
   function saveStages(o) { try { localStorage.setItem(R.STAGE_KEY, JSON.stringify(o)); } catch (e) {} }
+  // 상시 명단 (fcb-meta-v1). 없으면 옛 저장에서 한 번 옮긴다
+  function loadMeta() {
+    var m = null;
+    try { m = M.normalize(JSON.parse(localStorage.getItem(M.KEY) || "null")); } catch (e) {}
+    if (!m) {
+      var raw = null; try { raw = JSON.parse(localStorage.getItem(R.SAVE_KEY) || "null"); } catch (e) {}
+      m = M.migrate(loadStages(), raw, R.STAGES);
+      saveMeta(m);
+    }
+    return m;
+  }
+  function saveMeta(m) { try { localStorage.setItem(M.KEY, JSON.stringify(m)); } catch (e) {} }
 
   // ---------- 지도 ----------
   function showMap() {
@@ -171,6 +183,7 @@
           acts.appendChild(btn(C.CAST[id].name + "을 쉬게 한다", "그 자리에 " + C.CAST[node.who].name + "이 선다", "", function () {
             var msg = R.recruit(run, node.who, id);
             if (!msg) return;
+            var mm = loadMeta(); if (M.unlock(mm, node.who)) { saveMeta(mm); msg += " " + C.CAST[node.who].name + " 영구 합류 — 다음 런부터 출전 고르기에 나온다."; }
             doneMsg(msg);
           }, "bench-" + id));
         });
@@ -179,6 +192,17 @@
         body.innerHTML = lines.map(function (ln) {
           return '<p class="room-msg"><b>' + esc(ln[0]) + '</b> ' + esc(ln[1]) + "</p>";
         }).join("");
+        if (R.meetKnown(run, node.who)) {
+          body.innerHTML += '<p class="room-msg">이미 함께 걷고 있다. 이 방에 남겨 둔 것을 건넨다.</p>';
+          acts.appendChild(btn("받는다", "보물·전술 둘 중 하나", "primary", function () {
+            p.reward = R.boonOffer(run, run.seed * 37 + run.floor);
+            p.msg = R.josa(C.CAST[node.who].name, "이", "가") + " 남겨 둔 것. 하나만 챙길 수 있다.";
+            save(); showNode();
+          }, "btn-known"));
+          acts.appendChild(btn("그냥 간다", "이 층은 지나간다", "ghost", nextFloor, "btn-skip"));
+          $("#node-party").innerHTML = partyHtml(); A.show("scr-node");
+          return;
+        }
         var full = run.recruited.length >= 2;
         if (!full) acts.appendChild(btn("데려간다", "출전 중인 한 명을 쉬게 한다", "primary", function () {
           p.bench = true; save(); showNode();
@@ -343,7 +367,7 @@
       var st = R.STAGES[n];
       if (!st.open) { shut.push(n + " " + st.name); return; }
       var cl = (rec.clears[n] ? " · 클리어 " + rec.clears[n] : "") + (rec.hard && rec.hard[n] ? " · 하드 " + rec.hard[n] : "");
-      var b = btn(n + " · " + st.name, (sv ? "새로 시작 · " : "") + st.door + " · 보스 " + st.boss + cl, "stage" + (!sv && n === rec.last ? " primary" : ""), function () { newRun(n); }, n === 1 ? "btn-start" : "btn-stage-" + n);
+      var b = btn(n + " · " + st.name, (sv ? "새로 시작 · " : "") + st.door + " · 보스 " + st.boss + cl, "stage" + (!sv && n === rec.last ? " primary" : ""), function () { startStage(n); }, n === 1 ? "btn-start" : "btn-stage-" + n);
       b.dataset.stage = n;
       list.appendChild(b);
     });
@@ -353,15 +377,66 @@
     $("#btn-diff-hard").setAttribute("aria-pressed", d === "hard" ? "true" : "false");
     $("#diff-hard-sub").textContent = "적 HP×" + R.DIFF.hard.hp + " 공격×" + R.DIFF.hard.atk;
   }
-  function newRun(stageNo) {
-    // 목록에서 새로 시작 = 타이틀에서 고른 난이도. 다시 하기(번호 없음) = 그 런의 난이도
+  // ---------- 출전 고르기 ----------
+  var pick = null;
+  function startStage(n) {
+    var m = loadMeta();
+    if (m.unlocked.length <= 3) return newRun(n, m.unlocked.slice());
+    pick = { stage: n, ids: M.defaultParty(m), look: null };
+    showParty();
+  }
+  function showParty() {
+    leaveScene();
+    var m = loadMeta(), st = R.STAGES[pick.stage];
+    $("#party-stage").textContent = pick.stage + " · " + st.name + (loadDiff() === "hard" ? " · 하드" : "");
+    $("#party-sub").textContent = "출전 셋 · " + pick.ids.length + "/3 · 해금 " + m.unlocked.length + "명";
+    var grid = $("#party-grid"); grid.innerHTML = "";
+    m.unlocked.forEach(function (id) {
+      var cd = C.CAST[id], i = pick.ids.indexOf(id);
+      var b = document.createElement("button");
+      b.type = "button"; b.id = "pc-" + id;
+      b.className = "pcard" + (i >= 0 ? " on" : "") + (pick.look === id ? " look" : "");
+      b.style.setProperty("--c", cd.color);
+      b.innerHTML = (i >= 0 ? '<span class="ord">' + (i + 1) + "</span>" : "") +
+        '<img class="' + (cd.pixel ? "px" : "") + '" src="' + cd.img + '" alt="" /><b>' + esc(cd.name) + "</b><small>" + esc(C.ORIGINS[cd.origin].name) + "</small>";
+      b.addEventListener("click", function () {
+        var k = pick.ids.indexOf(id);
+        if (k >= 0) pick.ids.splice(k, 1);
+        else if (pick.ids.length < 3) pick.ids.push(id);
+        pick.look = id;
+        showParty();
+      });
+      grid.appendChild(b);
+    });
+    var lk = C.CAST[pick.look || pick.ids[0] || m.unlocked[0]];
+    var a = lk.actions;
+    $("#party-info").innerHTML = "<b>" + esc(lk.name) + " · " + esc(lk.title) + "</b>" +
+      '<div class="pi-row">' + esc(C.ORIGINS[lk.origin].name) + " · HP <span>" + lk.hp + "</span> · 공격 <span>" + lk.atk + "</span></div>" +
+      '<div class="pi-row">스킬 <span>' + esc(a.skill.name) + "</span> " + esc(a.skill.desc) + "</div>" +
+      '<div class="pi-row">필살 <span>' + esc(a.ult.name) + "</span> " + esc(a.ult.desc) + "</div>";
+    var go = $("#btn-party-go"), ok3 = pick.ids.length === 3;
+    go.disabled = !ok3;
+    go.innerHTML = ok3 ? "이 셋으로 출발" : "셋을 고르세요 (" + pick.ids.length + "/3)";
+    A.show("scr-party");
+  }
+  function partyGo() {
+    if (!pick || pick.ids.length !== 3) return;
+    var m = loadMeta();
+    if (!M.validParty(m, pick.ids)) return;
+    m.party = pick.ids.slice(); saveMeta(m);
+    newRun(pick.stage, pick.ids.slice());
+  }
+
+  function newRun(stageNo, party) {
+    // 목록에서 새로 시작 = 타이틀에서 고른 난이도. 다시 하기(번호 없음) = 그 런의 난이도·시작 셋
     var diff = typeof stageNo === "number" ? loadDiff() : R.diffOf(run);
+    if (!party) party = run && run.start ? run.start.slice() : null;
     A.abort();
     if (typeof stageNo !== "number") stageNo = run && run.stage ? run.stage : loadStages().last || 1;
     if (!R.STAGES[stageNo] || !R.STAGES[stageNo].open) stageNo = 1;
     var rec = loadStages(); rec.last = stageNo; saveStages(rec);
     var seed = A.hash.seed != null ? Number(A.hash.seed) : undefined;
-    run = R.newRun(seed, stageNo, diff);
+    run = R.newRun(seed, stageNo, diff, party);
     save();
     showMap();
   }
@@ -375,6 +450,8 @@
 
   function init() {
     $("#btn-continue").addEventListener("click", cont);
+    $("#btn-party-go").addEventListener("click", partyGo);
+    $("#btn-party-back").addEventListener("click", function () { pick = null; updateTitle(); A.show("scr-title"); });
     $("#btn-diff-normal").addEventListener("click", function () { saveDiff("normal"); updateTitle(); });
     $("#btn-diff-hard").addEventListener("click", function () { saveDiff("hard"); updateTitle(); });
     $("#btn-retry").addEventListener("click", function () { newRun(); });
@@ -395,10 +472,11 @@
     $("#btn-quit").addEventListener("click", function () {
       A.abort(); save(); updateTitle(); A.show("scr-title");
     });
+    loadMeta();
     updateTitle();
     window.__fcbRun = {
       get run() { return run; }, R: R, newRun: newRun, cont: cont, showMap: showMap, showNode: showNode, enterNode: enterNode,
-      result: result, save: save, loadSave: loadSave, battle: false, loadStages: loadStages, updateTitle: updateTitle, loadDiff: loadDiff,
+      result: result, save: save, loadSave: loadSave, battle: false, loadStages: loadStages, updateTitle: updateTitle, loadDiff: loadDiff, loadMeta: loadMeta, saveMeta: saveMeta, startStage: startStage, M: M,
     };
   }
   init();

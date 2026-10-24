@@ -549,7 +549,8 @@
     return n;
   }
 
-  function newRun(seed, stage, diff) {
+  // party: 출전 고르기에서 고른 셋 (없으면 시작 셋 = 지금과 같다)
+  function newRun(seed, stage, diff, party) {
     if (seed == null) seed = (Date.now() & 0x7fffffff);
     var st = STAGES[stage] && STAGES[stage].plan ? STAGES[stage] : STAGES[1];
     var r = rng(seed);
@@ -560,16 +561,30 @@
       for (var i = kinds.length - 1; i > 0; i--) { var j = Math.floor(r() * (i + 1)); var t = kinds[i]; kinds[i] = kinds[j]; kinds[j] = t; }
       return kinds.map(function (k) { return makeNode(r, k, f.tier, used, st); });
     });
-    var active = C.PARTY.slice();
+    var active = validStart(party) ? party.slice() : C.PARTY.slice();
     var party = {};
     active.forEach(function (id) { party[id] = { hp: C.CAST[id].hp, gauge: 0 }; });
     return {
       v: 2, stage: st.no, diff: diff === "hard" ? "hard" : "normal", seed: seed, floor: 0, map: map, path: [], party: party,
-      active: active, roster: active.slice(), recruited: [],
+      active: active, roster: active.slice(), recruited: [], start: active.slice(),
       boons: [], over: null,
       stats: { battles: 0, rounds: 0, maxHit: 0, ults: 0, breaks: 0 },
     };
   }
+
+  function validStart(ids) {
+    if (!Array.isArray(ids) || ids.length !== 3) return false;
+    return ids.every(function (id, i) { return C.CAST[id] && ids.indexOf(id) === i; });
+  }
+  // 만남 대사에서 명단에 없는 사람이 말하는 줄은 뺀다 (시작 셋 그대로면 아무것도 안 빠진다)
+  var NAME_ID = {};
+  Object.keys(C.CAST).forEach(function (id) { NAME_ID[C.CAST[id].name] = id; });
+  function present(run, who, lines) {
+    var out = lines.filter(function (ln) { var id = NAME_ID[ln[0]]; return !id || id === who || run.roster.indexOf(id) >= 0; });
+    return out.length ? out : lines;
+  }
+  // 이미 명단에 있는 동료의 만남 방: 영입 대신 보물 (docs/GROWTH.md ①)
+  function meetKnown(run, who) { return run.roster.indexOf(who) >= 0; }
 
   function mods(run) {
     return { rally: run.boons.indexOf("rally") >= 0 ? 5 : 0, guardPlus: run.boons.indexOf("guard") >= 0 ? 15 : 0 };
@@ -666,13 +681,14 @@
   function meetScript(run, who) {
     var st = stageOf(run), m = st.meet[who];
     if (!m) return [];
-    if (run.recruited.length >= 2) return m.full;
+    if (meetKnown(run, who)) return present(run, who, m.reunion || m.open || m.arin || m.none || []);
+    if (run.recruited.length >= 2) return present(run, who, m.full);
     var rw = [].concat(st.reunionWith || []);
-    if (m.reunion && rw.some(function (id) { return run.active.indexOf(id) >= 0; })) return m.reunion;
-    if (!m.arin) return m.open;   // 스테이지 1 가렌만 아린/세라/아리아 갈래가 따로 있다
-    if (run.active.indexOf("arin") >= 0) return m.arin;
-    if (run.active.indexOf("sera") >= 0) return m.sera;
-    return m.none;
+    if (m.reunion && rw.some(function (id) { return run.active.indexOf(id) >= 0; })) return present(run, who, m.reunion);
+    if (!m.arin) return present(run, who, m.open);   // 스테이지 1 가렌만 아린/세라/아리아 갈래가 따로 있다
+    if (run.active.indexOf("arin") >= 0) return present(run, who, m.arin);
+    if (run.active.indexOf("sera") >= 0) return present(run, who, m.sera);
+    return present(run, who, m.none);
   }
   function recruit(run, who, benchId) {
     if (!stageOf(run).meet[who] || run.recruited.length >= 2) return null;
@@ -725,7 +741,7 @@
     STAGES: STAGES, stageOf: stageOf, openStages: openStages, josa: josa, STAGE_KEY: "fcb-stages-v1",
     newRun: newRun, current: current, battleConfig: battleConfig, applyBattle: applyBattle,
     healAll: healAll, addGauge: addGauge, gainBoon: gainBoon, boonOffer: boonOffer, rollEvent: rollEvent,
-    choose: choose, advance: advance, partySummary: partySummary, validRun: validRun, mods: mods, meetScript: meetScript, recruit: recruit, setActive: setActive, mapLine: mapLine, eliteLine: eliteLine,
+    choose: choose, advance: advance, partySummary: partySummary, validRun: validRun, mods: mods, meetScript: meetScript, meetKnown: meetKnown, recruit: recruit, setActive: setActive, mapLine: mapLine, eliteLine: eliteLine,
   };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.FCBRun = api;
