@@ -512,7 +512,20 @@
       if (ls.lv >= t) inf += perkPick(lid, t, "party");
       else inf += '<div class="pi-row pi-lock">Lv' + t + " 갈림길: " + esc(M.PICKS[lid][t][0][1]) + " / " + esc(M.PICKS[lid][t][1][1]) + "</div>";
     });
+    // 동료 조합 (docs/SYNERGY.md): 고른 셋으로 켜질 조합 미리보기 + 보고 있는 동료가 든 조합
+    var mine = C.SYN.filter(function (c) { return c.who.indexOf(lid) >= 0; });
+    if (mine.length) inf += '<div class="pi-row pi-syn">조합 <span>' + mine.map(function (c) { return esc(c.name); }).join(" · ") + "</span></div>";
     $("#party-info").innerHTML = inf;
+    var on = pick.ids.length === 3 ? C.synergyOf(pick.ids) : [];
+    var sh = "";
+    if (on.length) {
+      C.SYN.filter(function (c) { return on.indexOf(c.id) >= 0; }).forEach(function (c, i) {
+        sh += '<div class="ps-row"><b>🔗 ' + esc(c.name) + "</b> " + esc(c.desc) + "</div>";
+      });
+      var first = C.SYN.filter(function (c) { return on.indexOf(c.id) >= 0; })[0];
+      sh += '<div class="ps-line">' + esc(first.line) + "</div>";
+    } else sh = '<div class="ps-row ps-none">' + (pick.ids.length === 3 ? "조합 없음 — 데려온 동료를 섞으면 조합이 켜진다" : "셋을 고르면 켜질 조합이 보인다") + "</div>";
+    $("#party-syn").innerHTML = sh;
     bindPerk($("#party-info"), showParty);
     var go = $("#btn-party-go"), ok3 = pick.ids.length === 3;
     go.disabled = !ok3;

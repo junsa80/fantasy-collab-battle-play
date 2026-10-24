@@ -114,6 +114,12 @@
     $("#tb-wave").textContent = ctx && ctx.floorText ? ctx.floorText : "웨이브 " + (S.wave + 1) + "/" + S.waves.length;
     $("#tb-wname").textContent = S.waves[S.wave].name;
     $("#tb-round").textContent = "라운드 " + S.round;
+    var sy = $("#tb-syn");
+    if (sy) {
+      var names = S.syn ? C.SYN.filter(function (c) { return S.syn[c.id]; }).map(function (c) { return c.name; }) : [];
+      sy.hidden = !names.length;
+      sy.textContent = names.length ? "🔗 " + names.join(" · ") : "";
+    }
     if (focus) { var f = C.find(S, focus); if (!f || !f.alive) focus = null; }
     if (!focus) { var dt = C.defaultTarget(S); focus = dt ? dt.uid : null; }
 

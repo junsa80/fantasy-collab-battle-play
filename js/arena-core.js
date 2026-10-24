@@ -201,6 +201,44 @@
   ];
   var PARTY = ["arin", "sera", "aria"];
 
+  // 동료 조합 (docs/SYNERGY.md). 시작 셋만으로는 하나도 켜지지 않는다
+  var MARKERS = ["aria", "mariel", "odette", "noel", "kael"], FINISHERS = ["leo", "serena", "lin"];
+  function has(ids, id) { return ids.indexOf(id) >= 0; }
+  function cnt(ids, list) { return ids.filter(function (id) { return has(list, id); }).length; }
+  function ofOrigin(ids, o) { return ids.filter(function (id) { return CAST[id] && CAST[id].origin === o; }); }
+  var SYN = [
+    { id: "knights", name: "왕관 기사단", desc: "잿빛 왕관 아군 방어 → 다른 아군 게이지 +8", line: "가렌: 깃발 아래 다시 섰소. 방패는 혼자 들지 않소.",
+      need: function (ids) { return ofOrigin(ids, "ashen").length >= 2 && cnt(ids, ["garen", "arthur", "kael"]) >= 1; } },
+    { id: "stage", name: "미녀 덱 무대", desc: "필살기 → 다른 아군 게이지 +10 · 전원 HP 8%", line: "세레나: 무대가 뒤집혀도 박자는 그대로예요.",
+      need: function (ids) { return cnt(ids, ["mariel", "serena", "odette"]) >= 2; } },
+    { id: "survey", name: "룬 측량", desc: "전투 시작 적 전원 약점 표시", line: "린: 재 봤어. 약한 데는 여기.",
+      need: function (ids) { return cnt(ids, ["leo", "noel", "lin"]) >= 2; } },
+    { id: "finisher", name: "표식과 결정타", desc: "표시된 적에게 마무리 동료 피해 ×1.2", line: "레오: 표시된 칸에 긋는다. 한 번이면 된다.",
+      need: function (ids) { return cnt(ids, MARKERS) >= 1 && cnt(ids, FINISHERS) >= 1; } },
+    { id: "shield", name: "방패와 성역", desc: "방어 피해 60% 감소 · 세라 치유 +10", line: "세라: 앞에 서 주시면, 제가 뒤에서 일으킬게요.",
+      need: function (ids) { return has(ids, "sera") && (has(ids, "garen") || has(ids, "kael")); } },
+    { id: "ledgers", name: "두 권의 장부", desc: "노엘·카엘 표시 +1턴 · 표시하면 게이지 +15", line: "카엘: 장부는 둘이 맞춰 봐야 틀린 데가 보인다.",
+      need: function (ids) { return has(ids, "noel") && has(ids, "kael"); } },
+    { id: "banquet", name: "연회의 패", desc: "마리엘 표시 +1턴 · 아린 게이지 +20", line: "마리엘: 연회장에서 본 패다. 이번엔 네 편으로 읽는다.",
+      need: function (ids) { return has(ids, "arin") && has(ids, "mariel"); } },
+    { id: "side", name: "나란히", desc: "아린·가렌 브레이크 → 전원 게이지 +15", line: "아린: 나란히다. 뒤에 서지 마라.",
+      need: function (ids) { return has(ids, "arin") && has(ids, "garen"); } },
+    { id: "clause", name: "조항과 장부", desc: "약점 피해 ×1.4 · 표시된 적 공격 −15%", line: "노엘: 조항대로, 장부대로. 깎을 데를 깎는다.",
+      need: function (ids) { return has(ids, "odette") && has(ids, "noel"); } },
+  ];
+  SYN.push(
+    { id: "decree", name: "왕의 조항", desc: "두 서약 버프가 겹친다 · 필살 → 서로 게이지 +30", line: "오데트: 폐하의 서약 아래, 제17조를 읽겠습니다.",
+      need: function (ids) { return has(ids, "arin") && has(ids, "odette"); } },
+    { id: "audit", name: "성역의 장부", desc: "노엘 표시 → 세라 게이지 +10", line: "노엘: 치유 값은 장부에서 빼 두지. 마음껏 써.",
+      need: function (ids) { return has(ids, "sera") && has(ids, "noel"); } },
+    { id: "hunt", name: "패와 사냥", desc: "마리엘 표시 +1턴 · 아리아 게이지 +25 · 분쇄 ×1.2", line: "아리아: 네 카드가 가리키는 데를 부순다.",
+      need: function (ids) { return has(ids, "aria") && has(ids, "mariel"); } }
+  );
+  var SYN_WHO = {"knights": ["arin", "sera", "garen", "arthur", "kael"], "stage": ["mariel", "serena", "odette"], "survey": ["leo", "noel", "lin"], "finisher": ["aria", "mariel", "odette", "noel", "kael", "leo", "serena", "lin"], "shield": ["sera", "garen", "kael"], "ledgers": ["noel", "kael"], "banquet": ["arin", "mariel"], "side": ["arin", "garen"], "clause": ["odette", "noel"], "decree": ["arin", "odette"], "audit": ["sera", "noel"], "hunt": ["aria", "mariel"]};
+  SYN.forEach(function (c) { c.who = SYN_WHO[c.id] || []; });
+  function synergyOf(ids) { ids = ids || []; return SYN.filter(function (c) { return c.need(ids); }).map(function (c) { return c.id; }); }
+  function SY(s, k) { return !!(s.syn && s.syn[k]); }
+
   var GAUGE = { attack: 15, skill: 12, guard: 20, hurtMul: 40, wave: 15, start: 10 };
 
   function mulberry32(a) {
@@ -239,6 +277,7 @@
       round: 1, wave: 0, phase: "player",
       waves: opts.waves && opts.waves.length ? opts.waves : WAVES,
       mods: opts.mods || {},
+      syn: null,
       allies: ((opts.party && opts.party.length === 3 && opts.party.every(function (id) { return CAST[id]; })) ? opts.party : PARTY).map(function (id) { return makeUnit(CAST[id], "ally"); }),
       enemies: [], acted: {},
       stats: { maxHit: 0, ults: 0, breaks: 0, rounds: 0, dealt: 0 },
@@ -260,11 +299,13 @@
         if (c.gauge != null) u.gauge = Math.max(0, Math.min(100, Math.round(c.gauge)));
       });
     }
+    if (opts.syn && opts.syn.length) { s.syn = {}; opts.syn.forEach(function (k) { s.syn[k] = 1; }); }
     s.allies.forEach(function (u) {
       if (P(u, "vanguard") && u.alive) u.gauge = Math.min(100, u.gauge + 25);
       if (s.mods.startGauge && s.mods.startGauge[u.id] && u.alive) u.gauge = Math.min(100, u.gauge + s.mods.startGauge[u.id]);
     });
     loadWave(s, 0);
+    if (SY(s, "survey")) s.enemies.forEach(function (e) { e.mark = Math.max(e.mark, 1); });
     planIntents(s);
     return s;
   }
@@ -299,8 +340,10 @@
     opt = opt || {};
     var v = atkOf(src) * pow * (extra || 1);
     var weak = dst.mark > 0;
-    if (weak) v *= 1.3;
-    if (dst.guard) v *= 0.5;
+    if (weak) v *= SY(s, "clause") ? 1.4 : 1.3;
+    if (weak && src.side === "ally" && SY(s, "finisher") && FINISHERS.indexOf(src.id) >= 0) v *= 1.2;
+    if (dst.guard) v *= SY(s, "shield") ? 0.4 : 0.5;
+    if (src.side === "enemy" && src.mark > 0 && SY(s, "clause")) v *= 0.85;
     if (dst.sanctum > 0) v *= 0.7;
     v *= 0.92 + s.rand() * 0.16;
     var amt = Math.max(1, Math.round(v));
@@ -316,7 +359,10 @@
     // 브레이크(충전 저지)
     if (dst.charge && dst.hp > 0) {
       dst.charge.dealt += Math.round(amt * (weak ? 2 : 1) * (opt.breakMul || 1) * (P(src, "wedge") ? 1.6 : 1));
-      if (opt.forceBreak || dst.charge.dealt >= dst.charge.need) doBreak(s, dst, ev);
+      if (opt.forceBreak || dst.charge.dealt >= dst.charge.need) {
+        doBreak(s, dst, ev);
+        if (SY(s, "side") && (src.id === "arin" || src.id === "garen")) living(s.allies).forEach(function (m) { m.gauge = Math.min(100, m.gauge + 15); });
+      }
     }
     if (dst.hp <= 0 && dst.alive) {
       dst.alive = false; dst.charge = null; dst.intent = null;
@@ -372,6 +418,7 @@
       u.gauge = Math.min(100, u.gauge + GAUGE.guard + (s.mods.guardPlus || 0) + (P(u, "breath") ? 10 : 0));
       ev.push({ type: "guard", dst: u.uid });
       if (P(u, "breath")) heal(u, Math.round(u.maxHp * 0.12), ev);
+      if (SY(s, "knights") && CAST[u.id].origin === "ashen") living(s.allies).forEach(function (m) { if (m !== u) m.gauge = Math.min(100, m.gauge + 8); });
     } else {
       var a = CAST[u.id].actions[key];
       // 갈림길 보정 (원본 CAST 는 건드리지 않고 복사본에)
@@ -385,8 +432,21 @@
         if (P(u, "first") && !u.firstDone && a.kind !== "heal" && a.kind !== "sanctum") a.pow *= 1.6;
         u.firstDone = true;
       }
+      if (s.syn) {
+        var c2 = {}; for (var k1 in a) c2[k1] = a[k1]; a = c2;
+        if (key === "skill" && a.kind === "heal" && u.id === "sera" && SY(s, "shield")) a.pow += 10;
+        if (key === "skill" && a.kind === "mark" && SY(s, "ledgers") && (u.id === "noel" || u.id === "kael")) { a.turns += 1; u.gauge = Math.min(100, u.gauge + 15); }
+        if (key === "ult" && u.id === "aria" && SY(s, "hunt")) a.pow *= 1.2;
+        if (key === "skill" && a.kind === "mark" && u.id === "mariel" && (SY(s, "hunt") || SY(s, "banquet"))) a.turns += 1;
+      }
+      var buddy = function (id, n) { living(s.allies).forEach(function (m) { if (m.id === id && m !== u) m.gauge = Math.min(100, m.gauge + n); }); };
+      if (key === "ult" && SY(s, "decree")) { if (u.id === "arin") buddy("odette", 30); if (u.id === "odette") buddy("arin", 30); }
+      if (key === "skill" && a.kind === "mark" && u.id === "noel" && SY(s, "audit")) buddy("sera", 10);
+      if (key === "skill" && a.kind === "mark" && u.id === "mariel" && SY(s, "hunt")) buddy("aria", 25);
+      if (key === "skill" && a.kind === "mark" && u.id === "mariel" && SY(s, "banquet")) buddy("arin", 20);
       if (key === "ult") {
         u.gauge = 0; s.stats.ults += 1;
+        if (SY(s, "stage")) living(s.allies).forEach(function (m) { if (m !== u) m.gauge = Math.min(100, m.gauge + 10); if (m.hp < m.maxHp) heal(m, Math.round(m.maxHp * 0.08), ev); });
         if (s.mods.ultShare) living(s.allies).forEach(function (m) { if (m !== u) m.gauge = Math.min(100, m.gauge + s.mods.ultShare); });
         ev.push({ type: "cutin", src: u.uid, unit: u.id, name: a.name, voice: a.voice, fx: a.fx, colors: a.colors, origin: ORIGINS[CAST[u.id].origin].name });
       } else {
@@ -406,7 +466,11 @@
         var hurt = living(s.allies);
         heal(lowestHp(hurt), a.pow, ev);
       } else if (a.kind === "dawn") {
-        living(s.allies).forEach(function (m) { m.atkUp = a.buff; m.atkUpTurns = a.turns; });
+        var stack = SY(s, "decree") && (u.id === "arin" || u.id === "odette");
+        living(s.allies).forEach(function (m) {
+          if (stack && m.atkUpTurns > 0) { m.atkUp = Math.min(1.6, m.atkUp + a.buff - 1); m.atkUpTurns = Math.max(m.atkUpTurns, a.turns); }
+          else { m.atkUp = a.buff; m.atkUpTurns = a.turns; }
+        });
         ev.push({ type: "buff", dsts: living(s.allies).map(function (m) { return m.uid; }), text: "공격 ×" + a.buff });
         if (target) damage(s, u, target, a.pow, 1, ev, { big: true });
       } else if (a.kind === "sanctum") {
@@ -551,6 +615,7 @@
   }
 
   var api = {
+    SYN: SYN, synergyOf: synergyOf,
     ORIGINS: ORIGINS, CAST: CAST, ENEMY: ENEMY, WAVES: WAVES, PARTY: PARTY, GAUGE: GAUGE,
     create: create, act: act, enemyPhase: enemyPhase, canUse: canUse, needsTarget: needsTarget,
     living: living, find: find, pendingAllies: pendingAllies, defaultTarget: defaultTarget,

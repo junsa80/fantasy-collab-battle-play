@@ -472,3 +472,11 @@ body[data-stage="5"] #scr-map, body[data-stage="5"] #scr-node, body[data-stage="
 #scr-result.grow .btn.big { min-height: 48px; }
 .room-msg.talk { color: var(--gold); }
 .rg-relic { font-size: 12px; color: var(--gold); text-align: center; }
+/* 동료 조합 (docs/SYNERGY.md) */
+.party-syn { display: grid; gap: 2px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 5px 10px; }
+.ps-row { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ps-row b { color: var(--gold); font-size: 13px; }
+.ps-none { white-space: normal; }
+.ps-line { font-size: 12px; color: var(--text); font-style: italic; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pi-syn span { color: var(--gold) !important; }
+.tb-syn { font-size: 12px; color: var(--gold); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 62vw; }

@@ -648,6 +648,9 @@
       mods: mods(run),
     };
     if (run.growth) cfg.growth = run.growth;
+    // 동료 조합 (docs/SYNERGY.md): 켜진 게 있을 때만 키가 생긴다 (시작 셋 = 없음)
+    var syn = C.synergyOf(ids);
+    if (syn.length) cfg.syn = syn;
     return cfg;
   }
 
