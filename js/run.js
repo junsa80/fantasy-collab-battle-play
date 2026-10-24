@@ -605,9 +605,9 @@
   // 회복 유물 (docs/GROWTH.md): 첫 영입(해금 넷) 뒤부터 보물·강적·카드 보상에 셋째 칸으로
   function healRelics(m) { return m.unlocked.length > 3 ? R.HEAL_RELICS.slice() : []; }
   // 런 시작 = 자동 장착 (직접 고른 칸은 둔다). 장비가 없으면 아무것도 안 한다
-  function gearAuto(m, party) {
+  function gearAuto(m, party, diff) {
     if (!party || !m.gear || !m.gear.own.length) return null;
-    var d = M.autoEquip(m, party);
+    var d = M.autoEquip(m, party, { diff: diff || loadDiff() });
     saveMeta(m);
     return d;
   }
@@ -622,7 +622,7 @@
       var mq = loadMeta(), qs = loadQuest();
       if (Q.state(qs, mq, qid) === "locked" || !party || !Q.partyOk(qid, party)) { updateTitle(); return showQuests(); }
       var seedq = A.hash.seed != null ? Number(A.hash.seed) : undefined;
-      gearAuto(mq, party);
+      gearAuto(mq, party, diff);
       run = R.newRun(seedq, qid, diff, party, M.growthMap(mq), { relics: M.relicsOf(mq).concat(Q.relics(qs), healRelics(mq)), variant: false, mirror: mq.unlocked.length > 3 });
       save();
       return showMap();
@@ -632,7 +632,7 @@
     var rec = loadStages(); rec.last = stageNo; saveStages(rec);
     var seed = A.hash.seed != null ? Number(A.hash.seed) : undefined;
     var mt = loadMeta(), sr = loadStages();
-    gearAuto(mt, party || M.defaultParty(mt));
+    gearAuto(mt, party || M.defaultParty(mt), diff);
     var extra = { relics: M.relicsOf(mt).concat(Q.relics(loadQuest()), healRelics(mt)), variant: !!((sr.clears && sr.clears[stageNo]) || (sr.hard && sr.hard[stageNo])), mirror: mt.unlocked.length > 3 };
     run = R.newRun(seed, stageNo, diff, party, M.growthMap(mt), extra);
     save();
@@ -699,7 +699,7 @@
   function gearDrop(src, seed) {
     var mm = loadMeta(), gid = src.indexOf("unique:") === 0 ? M.grantUnique(mm, src.slice(7)) : M.dropGear(mm, seed >>> 0, src);
     if (!gid) return null;
-    M.autoEquip(mm, run && run.start && M.validParty(mm, run.start) ? run.start : M.defaultParty(mm));
+    M.autoEquip(mm, run && run.start && M.validParty(mm, run.start) ? run.start : M.defaultParty(mm), { diff: run ? R.diffOf(run) : loadDiff() });
     saveMeta(mm);
     return gid;
   }
@@ -739,7 +739,7 @@
     } else df.hidden = true;
     var gl = $("#gear-list"); gl.innerHTML = "";
     if (!gs.own.length) gl.innerHTML = '<div class="gear-empty">아직 장비가 없다.<br>강적(★1–2)·보스(★2–3)를 이기거나 의뢰를 처음 끝내면(★3) 하나씩 나온다.<br>얻으면 자동으로 낀다.</div>';
-    var sorted = gs.own.slice().sort(function (x, y) { return M.gearScore(y, gv.sel, gv.party) - M.gearScore(x, gv.sel, gv.party); });
+    var sorted = gs.own.slice().sort(function (x, y) { return M.gearScore(y, gv.sel, gv.party, { diff: loadDiff() }) - M.gearScore(x, gv.sel, gv.party, { diff: loadDiff() }); });
     sorted.forEach(function (gid) {
       var G = M.GEAR[gid], w = M.wearer(m, gid), on = w === gv.sel, b = document.createElement("button");
       b.type = "button"; b.id = "gi-" + gid; b.className = "gitem t" + G.tier + (G.heal ? " heal" : "") + (on ? " on" : "");
@@ -797,7 +797,7 @@
   }
   function gearAutoBtn() {
     var m = loadMeta();
-    gearView.diff = M.autoEquip(m, gearView.party, { reset: true });
+    gearView.diff = M.autoEquip(m, gearView.party, { reset: true, diff: loadDiff() });
     saveMeta(m);
     if (SND) SND.sfx("click");
     showGear();
