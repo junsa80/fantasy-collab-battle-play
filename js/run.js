@@ -348,9 +348,63 @@
       ? "최대 피해 " + st.maxHit + " · 총 " + st.rounds + "라운드. 강적 방을 더 들러 보세요."
       : (Math.min(run.floor, R.FLOORS - 1) + 1) + "층에서 쓰러졌어요. 팁: 보스 전엔 ⛲ 휴식, ⚠ 충전은 「부위 분쇄」로 끊기.";
     run.over = run.over || "lose";
+    // 성장: 런마다 한 번 (져도). 새 저장도 경험치는 쌓인다
+    if (!run.awarded) {
+      var mm = loadMeta();
+      run.growRes = M.award(mm, run);
+      run.awarded = 1;
+      saveMeta(mm);
+    }
     save();
+    renderGrow();
     updateTitle();
     A.show("scr-result");
+  }
+  function fmtAtk(v) { return (Math.round(v * 10) / 10).toFixed(1).replace(/\.0$/, ""); }
+  function face(id) { var c = C.CAST[id]; return '<img class="' + (c.pixel ? "px" : "") + '" src="' + c.img + '" alt="" />'; }
+  // 결과 화면 「성장」: 명단 = 레벨 전후, 쉰 동료 = 한 줄, 갈림길이 열리면 두 버튼
+  function renderGrow() {
+    var box = $("#res-grow"), res = run && run.growRes;
+    if (!box) return;
+    if (!res) { box.innerHTML = ""; box.hidden = true; $("#scr-result").classList.remove("grow"); return; }
+    var m = loadMeta();
+    var mine = res.list.filter(function (r) { return !r.bench; });
+    var bench = res.list.filter(function (r) { return r.bench; });
+    var benchUp = bench.filter(function (r) { return r.up; });
+    var h = '<div class="rg-head">경험치 <b>+' + res.xp + "</b>" + (bench.length ? " · 쉬는 동료 " + bench.length + "명 +" + bench[0].gain : "") + "</div>";
+    mine.concat(benchUp).slice(0, 5).forEach(function (r) {
+      var nx = M.nextAt(m, r.id);
+      h += '<div class="rg-row' + (r.up ? " up" : "") + '" id="rg-' + r.id + '">' + face(r.id) + "<b>" + esc(C.CAST[r.id].name) + "</b>" +
+        (r.up
+          ? "<span>Lv" + r.from.lv + " → <em>Lv" + r.to.lv + "</em></span><small>HP " + r.from.hp + " → " + r.to.hp + " · 공격 " + fmtAtk(r.from.atk) + " → " + fmtAtk(r.to.atk) + "</small>"
+          : "<span>Lv" + r.to.lv + " +" + r.gain + "</span><small>" + (nx ? "다음 Lv까지 " + (nx - r.xp) : "최대 레벨") + "</small>") +
+        "</div>";
+    });
+    var pend = null;
+    m.unlocked.some(function (id) { var t = M.pending(m, id); if (t.length) { pend = { id: id, t: t[0] }; return true; } return false; });
+    if (pend) h += perkPick(pend.id, pend.t, "res");
+    box.innerHTML = h; box.hidden = false;
+    $("#scr-result").classList.add("grow");
+    bindPerk(box, function () { renderGrow(); });
+  }
+  // 갈림길 두 버튼 (결과·출전 고르기 공용)
+  function perkPick(id, t, where) {
+    var pk = M.PICKS[id][t], m = loadMeta(), cur = m.perks && m.perks[id] ? m.perks[id][t] : null;
+    var h = '<div class="perk-pick" data-where="' + where + '"><div class="pp-t">' + esc(C.CAST[id].name) + " · Lv" + t + " 갈림길" + (cur == null ? " — 하나를 고르세요" : "") + "</div><div class=\"pp-row\">";
+    [0, 1].forEach(function (i) {
+      var k = pk[i][0];
+      h += '<button type="button" class="btn perk' + (cur === i ? " on" : "") + '" id="perk-' + where + "-" + id + "-" + t + "-" + i + '" data-id="' + id + '" data-t="' + t + '" data-i="' + i + '"><b>' + esc(pk[i][1]) + "</b><small>" + esc(M.PERK[k].desc) + "</small></button>";
+    });
+    return h + "</div></div>";
+  }
+  function bindPerk(root, after) {
+    Array.prototype.forEach.call(root.querySelectorAll("button.perk"), function (b) {
+      b.addEventListener("click", function () {
+        var m = loadMeta();
+        if (M.choosePerk(m, b.dataset.id, Number(b.dataset.t), Number(b.dataset.i))) { saveMeta(m); if (SND) SND.sfx("click"); }
+        after();
+      });
+    });
   }
 
   // ---------- 타이틀·메뉴 ----------
@@ -398,7 +452,8 @@
       b.className = "pcard" + (i >= 0 ? " on" : "") + (pick.look === id ? " look" : "");
       b.style.setProperty("--c", cd.color);
       b.innerHTML = (i >= 0 ? '<span class="ord">' + (i + 1) + "</span>" : "") +
-        '<img class="' + (cd.pixel ? "px" : "") + '" src="' + cd.img + '" alt="" /><b>' + esc(cd.name) + "</b><small>" + esc(C.ORIGINS[cd.origin].name) + "</small>";
+        '<img class="' + (cd.pixel ? "px" : "") + '" src="' + cd.img + '" alt="" /><b>' + esc(cd.name) + "</b><small>" + esc(C.ORIGINS[cd.origin].name) + "</small>" +
+        '<span class="lv' + (M.pending(m, id).length ? " new" : "") + '">Lv' + M.level(m, id) + (M.pending(m, id).length ? "!" : "") + "</span>";
       b.addEventListener("click", function () {
         var k = pick.ids.indexOf(id);
         if (k >= 0) pick.ids.splice(k, 1);
@@ -408,12 +463,19 @@
       });
       grid.appendChild(b);
     });
-    var lk = C.CAST[pick.look || pick.ids[0] || m.unlocked[0]];
+    var lid = pick.look || pick.ids[0] || m.unlocked[0];
+    var lk = C.CAST[lid], ls = M.stats(m, lid), nx = M.nextAt(m, lid);
     var a = lk.actions;
-    $("#party-info").innerHTML = "<b>" + esc(lk.name) + " · " + esc(lk.title) + "</b>" +
-      '<div class="pi-row">' + esc(C.ORIGINS[lk.origin].name) + " · HP <span>" + lk.hp + "</span> · 공격 <span>" + lk.atk + "</span></div>" +
+    var inf = "<b>" + esc(lk.name) + " · " + esc(lk.title) + "</b>" +
+      '<div class="pi-row">' + esc(C.ORIGINS[lk.origin].name) + " · <span>Lv" + ls.lv + "</span> " + (nx ? "(" + M.xpOf(m, lid) + "/" + nx + ")" : "(최대)") + " · HP <span>" + ls.hp + "</span> · 공격 <span>" + fmtAtk(ls.atk) + "</span></div>" +
       '<div class="pi-row">스킬 <span>' + esc(a.skill.name) + "</span> " + esc(a.skill.desc) + "</div>" +
       '<div class="pi-row">필살 <span>' + esc(a.ult.name) + "</span> " + esc(a.ult.desc) + "</div>";
+    M.PERK_LV.forEach(function (t) {
+      if (ls.lv >= t) inf += perkPick(lid, t, "party");
+      else inf += '<div class="pi-row pi-lock">Lv' + t + " 갈림길: " + esc(M.PICKS[lid][t][0][1]) + " / " + esc(M.PICKS[lid][t][1][1]) + "</div>";
+    });
+    $("#party-info").innerHTML = inf;
+    bindPerk($("#party-info"), showParty);
     var go = $("#btn-party-go"), ok3 = pick.ids.length === 3;
     go.disabled = !ok3;
     go.innerHTML = ok3 ? "이 셋으로 출발" : "셋을 고르세요 (" + pick.ids.length + "/3)";
@@ -436,7 +498,7 @@
     if (!R.STAGES[stageNo] || !R.STAGES[stageNo].open) stageNo = 1;
     var rec = loadStages(); rec.last = stageNo; saveStages(rec);
     var seed = A.hash.seed != null ? Number(A.hash.seed) : undefined;
-    run = R.newRun(seed, stageNo, diff, party);
+    run = R.newRun(seed, stageNo, diff, party, M.growthMap(loadMeta()));
     save();
     showMap();
   }

@@ -439,3 +439,34 @@ body[data-stage="5"] #scr-map, body[data-stage="5"] #scr-node, body[data-stage="
 .party-info b { color: var(--text); font-size: 15px; }
 .party-info .pi-row span { color: var(--text); font-weight: 700; }
 .party-actions { display: grid; gap: 8px; }
+
+/* 성장 (docs/GROWTH.md ②) */
+.pcard .lv { position: absolute; top: 2px; right: 4px; font-size: 12px; font-weight: 800; color: var(--muted); }
+.pcard .lv.new { color: var(--gold); }
+.pi-lock { font-size: 12px; opacity: .8; }
+.perk-pick { display: grid; gap: 4px; margin-top: 4px; }
+.pp-t { font-size: 12px; color: var(--gold); font-weight: 700; text-align: left; }
+.pp-row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.btn.perk { min-height: 44px; padding: 5px 6px; display: grid; gap: 1px; text-align: center; background: var(--panel2); border: 1px solid var(--line); }
+.btn.perk b { font-size: 13px; color: var(--text); }
+.btn.perk small { font-size: 12px; color: var(--muted); line-height: 1.2; }
+.btn.perk.on { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold) inset; }
+.btn.perk.on b { color: var(--gold); }
+.res-grow { display: grid; gap: 4px; text-align: left; }
+.rg-head { font-size: 13px; color: var(--muted); text-align: center; }
+.rg-head b { color: var(--gold); font-size: 15px; }
+.rg-row { display: grid; grid-template-columns: 32px auto 1fr; grid-template-rows: auto auto; column-gap: 8px; align-items: center; background: var(--panel2); border-radius: 10px; padding: 3px 8px; font-size: 13px; }
+.rg-row img { grid-row: 1 / 3; width: 32px; height: 32px; border-radius: 8px; object-fit: cover; object-position: 50% 20%; }
+.rg-row b { font-size: 13px; }
+.rg-row span { font-size: 13px; color: var(--muted); text-align: right; }
+.rg-row em { font-style: normal; color: var(--gold); font-weight: 800; }
+.rg-row small { grid-column: 2 / 4; font-size: 12px; color: var(--muted); }
+.rg-row.up { box-shadow: 0 0 0 1px var(--gold) inset; }
+#scr-result.grow .result-box { gap: 6px; padding: 12px 12px; }
+#scr-result.grow .res-img { width: 64px; height: 64px; border-radius: 14px; }
+#scr-result.grow .res-title { font-size: 28px; }
+#scr-result.grow .res-line { font-size: 14px; }
+#scr-result.grow .res-stats div { padding: 4px 2px; }
+#scr-result.grow .res-stats b { font-size: 16px; }
+#scr-result.grow .res-tip { font-size: 12px; }
+#scr-result.grow .btn.big { min-height: 48px; }

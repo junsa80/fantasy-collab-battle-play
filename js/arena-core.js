@@ -201,6 +201,9 @@
     };
   }
 
+  // 성장 갈림길 (docs/GROWTH.md). 성장 값이 없으면 perks 가 없어 지금과 똑같이 돈다
+  function P(u, k) { return !!(u && u.perks && u.perks[k]); }
+
   var uidN = 0;
   var REG = {};  // uid → 유닛 (웨이브가 바뀌어도 이전 이벤트 재생용으로 남김)
   function makeUnit(src, side) {
@@ -229,6 +232,15 @@
       enemies: [], acted: {},
       stats: { maxHit: 0, ults: 0, breaks: 0, rounds: 0, dealt: 0 },
     };
+    if (opts.growth) {
+      s.allies.forEach(function (u) {
+        var g = opts.growth[u.id]; if (!g) return;
+        if (g.hp > 0) u.maxHp = u.hp = Math.round(g.hp);
+        if (g.atk > 0) u.atk = g.atk;
+        u.lv = g.lv || 1;
+        u.perks = g.perks || {};
+      });
+    }
     if (opts.carry) {
       s.allies.forEach(function (u) {
         var c = opts.carry[u.id]; if (!c) return;
@@ -237,6 +249,10 @@
         if (c.gauge != null) u.gauge = Math.max(0, Math.min(100, Math.round(c.gauge)));
       });
     }
+    s.allies.forEach(function (u) {
+      if (P(u, "vanguard") && u.alive) u.gauge = Math.min(100, u.gauge + 25);
+      if (s.mods.startGauge && s.mods.startGauge[u.id] && u.alive) u.gauge = Math.min(100, u.gauge + s.mods.startGauge[u.id]);
+    });
     loadWave(s, 0);
     planIntents(s);
     return s;
@@ -264,6 +280,7 @@
   function atkOf(u) {
     var m = u.atkUpTurns > 0 ? u.atkUp : 1;
     if (u.frost > 0) m *= 0.85;
+    if (P(u, "laststand") && u.hp <= u.maxHp * 0.4) m *= 1.3;
     return u.atk * m;
   }
 
@@ -287,13 +304,14 @@
     }
     // 브레이크(충전 저지)
     if (dst.charge && dst.hp > 0) {
-      dst.charge.dealt += Math.round(amt * (weak ? 2 : 1) * (opt.breakMul || 1));
+      dst.charge.dealt += Math.round(amt * (weak ? 2 : 1) * (opt.breakMul || 1) * (P(src, "wedge") ? 1.6 : 1));
       if (opt.forceBreak || dst.charge.dealt >= dst.charge.need) doBreak(s, dst, ev);
     }
     if (dst.hp <= 0 && dst.alive) {
       dst.alive = false; dst.charge = null; dst.intent = null;
       ev.push({ type: "down", dst: dst.uid });
     }
+    if (src.side === "ally" && src.alive && P(src, "drain") && src.hp < src.maxHp) heal(src, Math.max(1, Math.round(amt * 0.2)), ev);
     return amt;
   }
 
@@ -340,21 +358,35 @@
     if (!target || !target.alive || target.side !== "enemy") target = defaultTarget(s);
     if (key === "guard") {
       u.guard = true;
-      u.gauge = Math.min(100, u.gauge + GAUGE.guard + (s.mods.guardPlus || 0));
+      u.gauge = Math.min(100, u.gauge + GAUGE.guard + (s.mods.guardPlus || 0) + (P(u, "breath") ? 10 : 0));
       ev.push({ type: "guard", dst: u.uid });
+      if (P(u, "breath")) heal(u, Math.round(u.maxHp * 0.12), ev);
     } else {
       var a = CAST[u.id].actions[key];
+      // 갈림길 보정 (원본 CAST 는 건드리지 않고 복사본에)
+      if (u.perks) {
+        var b = {}; for (var k0 in a) b[k0] = a[k0]; a = b;
+        if (key === "skill" && P(u, "power")) { if (a.kind === "heal") a.pow += 15; else a.pow *= 1.3; }
+        if (key === "ult" && P(u, "ultpow")) { if (a.kind === "sanctum") a.pow += 15; else a.pow *= 1.25; }
+        if (key === "skill" && P(u, "quick")) { a.cd = Math.max(1, a.cd - 1); if (a.kind === "heal") a.pow -= 20; }
+        if (key === "ult" && P(u, "extend")) a.turns = (a.turns || 2) + 1;
+        if (key === "skill" && a.kind === "mark" && P(u, "longmark")) a.turns += 1;
+        if (P(u, "first") && !u.firstDone && a.kind !== "heal" && a.kind !== "sanctum") a.pow *= 1.6;
+        u.firstDone = true;
+      }
       if (key === "ult") {
         u.gauge = 0; s.stats.ults += 1;
+        if (s.mods.ultShare) living(s.allies).forEach(function (m) { if (m !== u) m.gauge = Math.min(100, m.gauge + s.mods.ultShare); });
         ev.push({ type: "cutin", src: u.uid, unit: u.id, name: a.name, voice: a.voice, fx: a.fx, colors: a.colors, origin: ORIGINS[CAST[u.id].origin].name });
       } else {
         u.gauge = Math.min(100, u.gauge + (key === "attack" ? GAUGE.attack : GAUGE.skill));
         if (s.mods.rally) living(s.allies).forEach(function (m) { if (m !== u) m.gauge = Math.min(100, m.gauge + s.mods.rally); });
+        if (P(u, "inspire")) living(s.allies).forEach(function (m) { if (m !== u) m.gauge = Math.min(100, m.gauge + 5); });
       }
       if (key === "skill") u.cd = a.cd;
       ev.push({ type: "use", src: u.uid, key: key, name: a.name });
       if (a.kind === "hit" && target) {
-        damage(s, u, target, a.pow, 1, ev, { breakMul: a.breakMul });
+        damage(s, u, target, a.pow, key === "attack" && s.mods.basicMul ? s.mods.basicMul : 1, ev, { breakMul: a.breakMul });
       } else if (a.kind === "mark" && target) {
         target.mark = a.turns;
         ev.push({ type: "mark", dst: target.uid, turns: a.turns });
@@ -369,7 +401,7 @@
       } else if (a.kind === "sanctum") {
         s.allies.forEach(function (m) {
           heal(m, a.pow, ev, a.revive);
-          if (m.alive) { m.frost = 0; m.sanctum = 2; }
+          if (m.alive) { m.frost = 0; m.sanctum = a.turns || 2; }
         });
         ev.push({ type: "buff", dsts: living(s.allies).map(function (m) { return m.uid; }), text: "정화 · 성역" });
       } else if (a.kind === "crush" && target) {

@@ -57,7 +57,115 @@
   }
   function defaultParty(m) { return validParty(m, m.party) ? m.party.slice() : STARTERS.slice(); }
 
-  var api = { KEY: KEY, STARTERS: STARTERS, ORDER: ORDER, fresh: fresh, normalize: normalize, unlock: unlock, migrate: migrate, validParty: validParty, defaultParty: defaultParty };
+
+  // ---------- ② 성장 (docs/GROWTH.md) ----------
+  var MAX_LV = 8;
+  var THRESH = [0, 0, 60, 150, 270, 420, 600, 820, 1080];   // THRESH[lv] = 그 레벨 누적 경험치
+  var XP = { floor: 10, win: 20, hard: 1.5, bench: 0.3 };
+  var PER_LV = { hp: 0.015, atk: 0.01 };
+  // 효과 종류 (엔진 arena-core 의 perks 키)
+  var PERK = {
+    power: { name: "강타", desc: "스킬 위력 ×1.3 (치유면 +15)" },
+    quick: { name: "단축", desc: "스킬 재사용 −1턴 (치유면 회복 −20)" },
+    wedge: { name: "쐐기", desc: "브레이크 누적 ×1.6" },
+    ultpow: { name: "극의", desc: "필살 위력 ×1.25 (성역이면 회복 +15)" },
+    extend: { name: "연장", desc: "필살 버프·성역 +1턴" },
+    vanguard: { name: "선봉", desc: "전투 시작 필살 게이지 +25" },
+    breath: { name: "숨 고르기", desc: "방어 때 HP 12% 회복 · 게이지 +10" },
+    inspire: { name: "고무", desc: "공격·스킬 뒤 다른 아군 게이지 +5" },
+    first: { name: "선제", desc: "전투 첫 행동 피해 ×1.6" },
+    laststand: { name: "배수진", desc: "HP 40% 이하면 공격 ×1.3" },
+    drain: { name: "흡수", desc: "준 피해 20% 만큼 회복" },
+    plate: { name: "철갑", desc: "최대 HP +15%" },
+    longmark: { name: "긴 표식", desc: "약점 표시 +1턴" },
+  };
+  // 동료별 갈림길 [Lv3 A, Lv3 B], [Lv6 A, Lv6 B] = [효과, 이름]
+  var PICKS = {
+    arin: { 3: [["wedge", "왕관 쐐기"], ["vanguard", "선봉의 새벽"]], 6: [["extend", "긴 새벽"], ["laststand", "무너진 왕관"]] },
+    sera: { 3: [["power", "깊은 치유"], ["quick", "짧은 기도"]], 6: [["extend", "성역 연장"], ["inspire", "축복의 노래"]] },
+    aria: { 3: [["longmark", "깊은 약점"], ["first", "선제 사냥"]], 6: [["ultpow", "완전 분쇄"], ["breath", "황금 방패"]] },
+    garen: { 3: [["plate", "철벽"], ["breath", "방패 숨"]], 6: [["extend", "긴 맹세"], ["laststand", "최후의 방패"]] },
+    mariel: { 3: [["quick", "빠른 패"], ["longmark", "긴 읽기"]], 6: [["ultpow", "마지막 패"], ["first", "선제 카드"]] },
+    leo: { 3: [["power", "깊은 각인"], ["wedge", "획 끊기"]], 6: [["ultpow", "큰 한 획"], ["drain", "생명 룬"]] },
+    serena: { 3: [["first", "첫 박자"], ["power", "보름달"]], 6: [["laststand", "새벽 직전"], ["drain", "달빛 흡수"]] },
+    odette: { 3: [["longmark", "긴 각주"], ["inspire", "기록의 박자"]], 6: [["extend", "제18조"], ["vanguard", "미리 쓴 조항"]] },
+    noel: { 3: [["inspire", "결산"], ["quick", "빠른 감사"]], 6: [["extend", "긴 장부"], ["plate", "두꺼운 장부"]] },
+    lin: { 3: [["wedge", "눈금 끊기"], ["quick", "빠른 측량"]], 6: [["ultpow", "새 이름"], ["first", "첫 눈금"]] },
+    arthur: { 3: [["vanguard", "길 안내"], ["power", "길잡이 강타"]], 6: [["extend", "긴 길"], ["laststand", "왕성의 기사"]] },
+    kael: { 3: [["plate", "판금"], ["longmark", "긴 장부"]], 6: [["breath", "하르트만의 벽"], ["ultpow", "꺾이지 않는 창"]] },
+  };
+  var PERK_LV = [3, 6];
+
+  function xpOf(m, id) { return (m.xp && m.xp[id]) || 0; }
+  function levelOfXp(xp) { var lv = 1; while (lv < MAX_LV && xp >= THRESH[lv + 1]) lv++; return lv; }
+  function level(m, id) { return levelOfXp(xpOf(m, id)); }
+  // 고른 갈림길 효과 키 목록 (레벨이 닿은 것만)
+  function perkKeys(m, id, lv) {
+    if (lv == null) lv = level(m, id);
+    var ch = (m.perks && m.perks[id]) || {}, out = [];
+    PERK_LV.forEach(function (t) { if (lv >= t && (ch[t] === 0 || ch[t] === 1) && PICKS[id]) out.push(PICKS[id][t][ch[t]][0]); });
+    return out;
+  }
+  function pending(m, id) {
+    var lv = level(m, id), ch = (m.perks && m.perks[id]) || {};
+    return PERK_LV.filter(function (t) { return lv >= t && ch[t] !== 0 && ch[t] !== 1; });
+  }
+  function choosePerk(m, id, t, idx) {
+    if (!PICKS[id] || PERK_LV.indexOf(t) < 0 || (idx !== 0 && idx !== 1) || level(m, id) < t) return false;
+    m.perks = m.perks || {}; m.perks[id] = m.perks[id] || {}; m.perks[id][t] = idx;
+    return true;
+  }
+  function statsAt(id, lv, keys) {
+    var c = C.CAST[id];
+    var hp = Math.round(c.hp * (1 + PER_LV.hp * (lv - 1)));
+    if (keys.indexOf("plate") >= 0) hp = Math.round(hp * 1.15);
+    var atk = Math.round(c.atk * (1 + PER_LV.atk * (lv - 1)) * 10) / 10;
+    return { lv: lv, hp: hp, atk: atk, perks: keys };
+  }
+  function stats(m, id) { var lv = level(m, id); return statsAt(id, lv, perkKeys(m, id, lv)); }
+  // 런 시작 때 찍어 두는 성장 값. Lv1 · 갈림길 없음이면 넣지 않는다 → 새 저장은 null (엔진이 지금과 똑같이 돈다)
+  function growthMap(m) {
+    var out = null;
+    (m.unlocked || []).forEach(function (id) {
+      var st = stats(m, id);
+      if (st.lv <= 1 && !st.perks.length) return;
+      var pk = {}; st.perks.forEach(function (k) { pk[k] = 1; });
+      out = out || {};
+      out[id] = { lv: st.lv, hp: st.hp, atk: st.atk, perks: pk };
+    });
+    return out;
+  }
+  // 런 경험치: 지난 층 × 10 + 승리 20, 하드 ×1.5. 명단 전부, 명단 밖 해금 동료 30%
+  function runXp(run) {
+    var win = run.over === "win";
+    var floors = win ? 6 : Math.max(0, Math.min(6, run.floor | 0));
+    var x = floors * XP.floor + (win ? XP.win : 0) + (run.bonusXp || 0);
+    if (run.diff === "hard") x = Math.round(x * XP.hard);
+    return x;
+  }
+  function addXp(m, id, n) {
+    if (!C.CAST[id] || !(n > 0)) return null;
+    var before = stats(m, id), x0 = xpOf(m, id);
+    m.xp[id] = Math.min(THRESH[MAX_LV], x0 + Math.round(n));
+    var after = stats(m, id);
+    return { id: id, gain: m.xp[id] - x0, xp: m.xp[id], from: before, to: after, up: after.lv > before.lv, pending: pending(m, id) };
+  }
+  function award(m, run) {
+    var full = runXp(run), out = [];
+    var roster = (run.roster || []).slice();
+    roster.forEach(function (id) { unlock(m, id); });
+    m.unlocked.forEach(function (id) {
+      var bench = roster.indexOf(id) < 0;
+      var r = addXp(m, id, bench ? Math.round(full * XP.bench) : full);
+      if (r) { r.bench = bench; out.push(r); }
+    });
+    return { xp: full, list: out };
+  }
+  function nextAt(m, id) { var lv = level(m, id); return lv >= MAX_LV ? null : THRESH[lv + 1]; }
+
+  var api = { KEY: KEY, STARTERS: STARTERS, ORDER: ORDER, fresh: fresh, normalize: normalize, unlock: unlock, migrate: migrate, validParty: validParty, defaultParty: defaultParty,
+    MAX_LV: MAX_LV, THRESH: THRESH, XP: XP, PER_LV: PER_LV, PERK: PERK, PICKS: PICKS, PERK_LV: PERK_LV,
+    xpOf: xpOf, level: level, levelOfXp: levelOfXp, perkKeys: perkKeys, pending: pending, choosePerk: choosePerk, stats: stats, statsAt: statsAt, growthMap: growthMap, runXp: runXp, addXp: addXp, award: award, nextAt: nextAt };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.FCBMeta = api;
 })(this);

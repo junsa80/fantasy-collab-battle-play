@@ -550,7 +550,7 @@
   }
 
   // party: 출전 고르기에서 고른 셋 (없으면 시작 셋 = 지금과 같다)
-  function newRun(seed, stage, diff, party) {
+  function newRun(seed, stage, diff, party, growth) {
     if (seed == null) seed = (Date.now() & 0x7fffffff);
     var st = STAGES[stage] && STAGES[stage].plan ? STAGES[stage] : STAGES[1];
     var r = rng(seed);
@@ -563,13 +563,17 @@
     });
     var active = validStart(party) ? party.slice() : C.PARTY.slice();
     var party = {};
-    active.forEach(function (id) { party[id] = { hp: C.CAST[id].hp, gauge: 0 }; });
-    return {
+    var g = growth || null;
+    active.forEach(function (id) { party[id] = { hp: g && g[id] ? g[id].hp : C.CAST[id].hp, gauge: 0 }; });
+    var run = {
       v: 2, stage: st.no, diff: diff === "hard" ? "hard" : "normal", seed: seed, floor: 0, map: map, path: [], party: party,
       active: active, roster: active.slice(), recruited: [], start: active.slice(),
       boons: [], over: null,
       stats: { battles: 0, rounds: 0, maxHit: 0, ults: 0, breaks: 0 },
     };
+    // 성장 값(Lv2 이상·갈림길)이 있을 때만. 새 저장은 키 자체가 없다
+    if (g) run.growth = g;
+    return run;
   }
 
   function validStart(ids) {
@@ -601,7 +605,7 @@
       var p = run.party[id];
       carry[id] = { hp: p.hp, gauge: Math.min(100, p.gauge + AFTER.gaugeStart) };
     });
-    return {
+    var cfg = {
       seed: seed,
       party: ids,
       waves: [{ name: room.name, enemies: node.pack.slice(), line: room.line,
@@ -609,6 +613,8 @@
       carry: carry,
       mods: mods(run),
     };
+    if (run.growth) cfg.growth = run.growth;
+    return cfg;
   }
 
   // 전투 결과 반영. 반환: "next" | "win" | "lose"
@@ -627,11 +633,11 @@
     return "next";
   }
 
-  function maxHp(id) { return C.CAST[id].hp; }
+  function maxHp(run, id) { var g = run && run.growth && run.growth[id]; return g ? g.hp : C.CAST[id].hp; }
   function healAll(run, frac, flat) {
     var out = {};
     Object.keys(run.party).forEach(function (id) {
-      var p = run.party[id], m = maxHp(id);
+      var p = run.party[id], m = maxHp(run, id);
       var before = p.hp;
       p.hp = Math.min(m, Math.max(p.hp, 0) + (flat || 0) + Math.round(m * (frac || 0)));
       out[id] = p.hp - before;
@@ -675,7 +681,7 @@
     var ids = run.active && run.active.length === 3 ? run.active : C.PARTY;
     return ids.map(function (id) {
       var p = run.party[id];
-      return { id: id, name: C.CAST[id].name, hp: p.hp, maxHp: maxHp(id), gauge: p.gauge };
+      return { id: id, name: C.CAST[id].name, hp: p.hp, maxHp: maxHp(run, id), gauge: p.gauge, lv: run.growth && run.growth[id] ? run.growth[id].lv : 1 };
     });
   }
   function meetScript(run, who) {
@@ -696,7 +702,7 @@
     if (run.active.indexOf(benchId) < 0) return null;
     run.roster.push(who);
     run.recruited.push(who);
-    run.party[who] = { hp: C.CAST[who].hp, gauge: 0 };
+    run.party[who] = { hp: maxHp(run, who), gauge: 0 };
     run.active[run.active.indexOf(benchId)] = who;
     return josa(C.CAST[who].name, "이", "가") + " 앞에 선다. " + josa(C.CAST[benchId].name, "은", "는") + " 우물에서 쉰다.";
   }
@@ -741,7 +747,7 @@
     STAGES: STAGES, stageOf: stageOf, openStages: openStages, josa: josa, STAGE_KEY: "fcb-stages-v1",
     newRun: newRun, current: current, battleConfig: battleConfig, applyBattle: applyBattle,
     healAll: healAll, addGauge: addGauge, gainBoon: gainBoon, boonOffer: boonOffer, rollEvent: rollEvent,
-    choose: choose, advance: advance, partySummary: partySummary, validRun: validRun, mods: mods, meetScript: meetScript, meetKnown: meetKnown, recruit: recruit, setActive: setActive, mapLine: mapLine, eliteLine: eliteLine,
+    choose: choose, advance: advance, maxHp: maxHp, partySummary: partySummary, validRun: validRun, mods: mods, meetScript: meetScript, meetKnown: meetKnown, recruit: recruit, setActive: setActive, mapLine: mapLine, eliteLine: eliteLine,
   };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.FCBRun = api;
