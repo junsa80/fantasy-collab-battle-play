@@ -61,26 +61,28 @@ img.px, .px img { image-rendering: pixelated; }
 
 /* 타이틀 */
 #scr-title { justify-content: flex-end; gap: 12px; padding-bottom: 16px; }
-.title-art { position: relative; flex: 1; min-height: 200px; }
+.title-art { position: relative; flex: 1; min-height: 200px; max-height: 46dvh; border-radius: 18px; overflow: hidden; }
+/* 표지 (docs/STORY.md): 커버를 배경으로, 초상은 작게 해서 가운데 균열을 가리지 않는다 */
+.ta-cover { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 42%; opacity: .9; }
 .ta-rift {
   position: absolute; inset: 0 4% 20%;
-  background: radial-gradient(closest-side, rgba(143,208,255,.55), rgba(155,123,255,.25) 55%, transparent 75%);
+  background: radial-gradient(closest-side, rgba(143,208,255,.22), rgba(155,123,255,.10) 55%, transparent 75%);
   filter: blur(6px); animation: rift 4s ease-in-out infinite alternate;
 }
 @keyframes rift { from { transform: scale(.95) rotate(-3deg); opacity: .8 } to { transform: scale(1.05) rotate(3deg); opacity: 1 } }
 .ta-hero {
-  position: absolute; bottom: 10%; width: 40%; aspect-ratio: 1; object-fit: cover;
+  position: absolute; bottom: 10%; width: 28%; aspect-ratio: 1; object-fit: cover;
   border-radius: 18px; border: 2px solid rgba(255,255,255,.25); box-shadow: 0 10px 30px rgba(0,0,0,.6);
 }
-.ta-arin { left: 27%; width: 46%; bottom: 2%; border-color: var(--gold); z-index: 3; }
-.ta-sera { left: 2%; transform: rotate(-6deg); border-color: var(--teal); z-index: 2; }
-.ta-aria { right: 2%; transform: rotate(6deg); border-color: var(--hunt); z-index: 2; }
+.ta-arin { left: 34%; width: 32%; bottom: 3%; border-color: var(--gold); z-index: 3; }
+.ta-sera { left: 4%; transform: rotate(-6deg); border-color: var(--teal); z-index: 2; }
+.ta-aria { right: 4%; transform: rotate(6deg); border-color: var(--hunt); z-index: 2; }
 .ta-vs {
   position: absolute; top: 15%; left: 50%; transform: translateX(-50%);
   font-weight: 900; font-size: 22px; color: #fff; text-shadow: 0 0 12px var(--ice); letter-spacing: .1em;
 }
 .ta-foes { position: absolute; top: 4%; left: 0; right: 0; display: flex; justify-content: space-between; padding: 0 6%; }
-.ta-foes img { width: 32%; max-width: 150px; aspect-ratio: 1; object-fit: cover; border-radius: 50%; border: 2px solid rgba(155,123,255,.7); opacity: .9; }
+.ta-foes img { width: 22%; max-width: 110px; aspect-ratio: 1; object-fit: cover; border-radius: 50%; border: 2px solid rgba(155,123,255,.7); opacity: .9; }
 .ta-foes img + img { border-color: var(--ice); }
 .logo { text-align: center; }
 .logo-kicker { font-size: 12px; letter-spacing: .3em; color: var(--muted); }
@@ -90,6 +92,7 @@ img.px, .px img { image-rendering: pixelated; }
   filter: drop-shadow(0 2px 0 #3a250a) drop-shadow(0 0 18px rgba(228,181,71,.35));
 }
 .logo-sub { margin: 2px 0 0; font-size: 17px; color: var(--ice); font-weight: 700; letter-spacing: .2em; }
+.logo-line { margin: 4px 0 0; font-size: 13px; color: var(--muted); }
 .chips { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; }
 .chip { font-size: 13px; padding: 5px 10px; border-radius: 99px; font-weight: 700; border: 1px solid; }
 .chip.ashen { color: var(--gold); border-color: rgba(228,181,71,.5); background: rgba(27,42,74,.6); }
