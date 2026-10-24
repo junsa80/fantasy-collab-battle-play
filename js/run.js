@@ -5,7 +5,7 @@
 */
 (function () {
   "use strict";
-  var C = window.FCBCore, R = window.FCBRun, A = window.__fcb;
+  var C = window.FCBCore, R = window.FCBRun, A = window.__fcb, SND = window.FCBSound;
   var $ = function (s, el) { return (el || document).querySelector(s); };
   var esc = A.esc;
   var run = null;
@@ -15,14 +15,21 @@
     wolf: "가장 다친 아군을 노린다",
     shadow_general: "⚠ 그림자 명령(전체) 충전 → 피해를 모아 BREAK",
     celes: "❄ 얼음 기둥 예고 · ⚠ 서리 노바 충전(전체+빙결)",
+    puppet: "무작위 한 명을 실로 당긴다",
+    bat: "가장 다친 아군을 문다",
+    gargoyle: "⚠ 석상의 포효(전체) 충전 → 피해를 모아 BREAK",
+    knox: "⬇ 성문 내리치기 예고 · ⚠ 여왕의 경계령 충전(전체+결박)",
   };
+  function eliteName(n) { var id = n.pack.filter(function (x) { return C.ENEMY[x].boss; })[0]; return id ? C.ENEMY[id].name : "강적"; }
   var KIND_DESC = {
     battle: function (n) { return n.pack.map(function (id) { return C.ENEMY[id].name; }).join(" · "); },
-    elite: function (n) { return "그림자 장군 · 이기면 전술·보물 선택"; },
+    elite: function (n) { return eliteName(n) + " · 이기면 전술·보물 선택"; },
     rest: function () { return "우물 HP 50% 회복 또는 명상 게이지 +40"; },
     treasure: function () { return "보물·전술 둘 중 하나"; },
     event: function () { return "균열 주사위: 보물 또는 기습"; },
-    meet: function (n) { return (n.who === "garen" ? "가렌" : n.who === "mariel" ? "마리엘" : "레오") + " · 데려가면 한 명이 쉰다"; },
+    meet: function (n) { return C.CAST[n.who].name + " · 데려가면 한 명이 쉰다"; },
+    // 559c57e 에서 빠져 6층 지도가 멈추던 것 복구 (26b428e 문구: 셀레스 · 서리 늑대)
+    boss: function (n) { return n.pack.slice().reverse().map(function (id) { return C.ENEMY[id].name; }).join(" · "); },
   };
 
   // ---------- 저장 ----------
@@ -61,9 +68,25 @@
     return b;
   }
 
+  // ---------- 스테이지 ----------
+  function stage() { return R.stageOf(run); }
+  function stageScene() {
+    var st = stage();
+    document.body.dataset.stage = String(st.no);
+    if (SND) { if (st.bgm) SND.bgm(st.bgm); else SND.stopBgm(); }
+  }
+  function leaveScene() { document.body.dataset.stage = ""; if (SND) SND.stopBgm(); }
+  function loadStages() {
+    try { var o = JSON.parse(localStorage.getItem(R.STAGE_KEY) || "null"); if (o && o.v === 1) return o; } catch (e) {}
+    return { v: 1, clears: {}, last: 1 };
+  }
+  function saveStages(o) { try { localStorage.setItem(R.STAGE_KEY, JSON.stringify(o)); } catch (e) {} }
+
   // ---------- 지도 ----------
   function showMap() {
     run.pending = null; save();
+    stageScene();
+    $("#map-sub").textContent = stage().name + " · 다음 방을 고르세요";
     $("#map-floor").textContent = floorText();
     $("#map-boons").textContent = boonText();
     var track = $("#track"); track.innerHTML = "";
@@ -109,6 +132,7 @@
 
   function showNode() {
     var node = curNode(); if (!node) return showMap();
+    stageScene();
     var p = run.pending, k = R.KIND[node.kind], room = R.ROOMS[node.room];
     $("#node-floor").textContent = floorText();
     $("#node-kind").textContent = k.icon + " " + k.name + " · " + room.name;
@@ -186,7 +210,7 @@
     } else if (node.kind === "event") {
       if (p.roll == null) {
         body.innerHTML = '<p class="room-msg">뒤집힌 잔 사이 카드 한 장. 집으면 균열이 주사위를 굴린다.</p>' +
-          '<p class="room-rule">🎲 1–' + R.EVENT.chance + " 기습 전투(그림자 병사 · 서리 늑대) · " + (R.EVENT.chance + 1) + "–100 보물</p>";
+          '<p class="room-rule">🎲 1–' + R.EVENT.chance + " 기습 전투(" + stage().packs.ambush[0].map(function (id) { return C.ENEMY[id].name; }).join(" · ") + ") · " + (R.EVENT.chance + 1) + "–100 보물</p>";
         acts.appendChild(btn("카드를 집는다", "주사위를 지금 굴린다", "primary big", function () {
           var e = R.rollEvent(run.seed * 31 + run.floor);
           p.roll = e.die; p.ambush = e.ambush;
@@ -195,7 +219,7 @@
         }, "event-roll"));
         acts.appendChild(btn("지나간다", "아무 일 없이 다음 층", "ghost", nextFloor, "btn-skip"));
       } else {
-        fightPack = R.PACKS.ambush[0]; scale = "ambush";
+        fightPack = stage().packs.ambush[0]; scale = "ambush";
         body.innerHTML = '<p class="room-msg">주사위 ' + p.roll + " · 기습! 카드가 그림자로 변했다.</p>";
       }
     } else {
@@ -262,15 +286,18 @@
   // ---------- 결과 ----------
   function result() {
     var win = run.over === "win";
-    var st = run.stats;
+    var st = run.stats, sg = stage();
+    leaveScene();
+    if (SND) SND.sfx(win ? "win" : "lose");
+    if (win) { var rec = loadStages(); rec.clears[sg.no] = (rec.clears[sg.no] || 0) + 1; saveStages(rec); }
     var t = $("#res-title");
-    t.textContent = win ? "균열 봉인!" : "패배…";
+    t.textContent = win ? (sg.no === 1 ? "균열 봉인!" : sg.name + " 돌파!") : "패배…";
     t.className = "res-title " + (win ? "win" : "lose");
     var img = $("#res-img");
-    img.src = win ? "img/arin.png" : "img/celes.webp";
-    img.className = "res-img" + (win ? " px" : "");
+    img.src = win ? sg.winImg : sg.loseImg;
+    img.className = "res-img" + (/\.png$/.test(img.src) ? " px" : "");
     img.style.borderColor = win ? "var(--gold)" : "var(--ice)";
-    $("#res-line").textContent = win ? "아린: “새벽은 우리 편이었어. 모두, 고마워.”" : "셀레스: “사냥은 끝났어. 다음엔 예고를 잘 봐.”";
+    $("#res-line").textContent = win ? sg.win : sg.lose;
     $("#res-stats").innerHTML =
       "<div><b>" + (Math.min(run.floor, R.FLOORS - 1) + 1) + "</b>도달 층</div>" +
       "<div><b>" + st.battles + "</b>전투</div>" +
@@ -287,17 +314,31 @@
 
   // ---------- 타이틀·메뉴 ----------
   function updateTitle() {
+    leaveScene();
     var sv = loadSave();
     var c = $("#btn-continue");
     c.hidden = !sv;
-    if (sv) $("#continue-sub").textContent = (Math.min(sv.floor, R.FLOORS - 1) + 1) + "층 · " + R.partySummary(sv).map(function (p) { return p.name + " " + p.hp; }).join(" · ");
-    $("#start-sub").textContent = sv ? "지금 기록 위에 새로 시작" : "6층 · 방을 골라 보스 셀레스까지";
-    $("#btn-start").classList.toggle("primary", !sv);
+    if (sv) $("#continue-sub").textContent = R.stageOf(sv).name + " · " + (Math.min(sv.floor, R.FLOORS - 1) + 1) + "층 · " + R.partySummary(sv).map(function (p) { return p.name + " " + p.hp; }).join(" · ");
+    var rec = loadStages();
+    var list = $("#stage-list"); list.innerHTML = "";
+    var shut = [];
+    Object.keys(R.STAGES).map(Number).forEach(function (n) {
+      var st = R.STAGES[n];
+      if (!st.open) { shut.push(n + " " + st.name); return; }
+      var cl = rec.clears[n] ? " · 클리어 " + rec.clears[n] : "";
+      var b = btn(n + " · " + st.name, (sv ? "새로 시작 · " : "") + st.door + " · 보스 " + st.boss + cl, "stage" + (!sv && n === rec.last ? " primary" : ""), function () { newRun(n); }, n === 1 ? "btn-start" : "btn-stage-" + n);
+      b.dataset.stage = n;
+      list.appendChild(b);
+    });
+    $("#stage-shut").textContent = shut.length ? shut.join(" · ") + " — 준비 중" : "";
   }
-  function newRun() {
+  function newRun(stageNo) {
     A.abort();
+    if (typeof stageNo !== "number") stageNo = run && run.stage ? run.stage : loadStages().last || 1;
+    if (!R.STAGES[stageNo] || !R.STAGES[stageNo].open) stageNo = 1;
+    var rec = loadStages(); rec.last = stageNo; saveStages(rec);
     var seed = A.hash.seed != null ? Number(A.hash.seed) : undefined;
-    run = R.newRun(seed);
+    run = R.newRun(seed, stageNo);
     save();
     showMap();
   }
@@ -307,22 +348,32 @@
     if (run.pending) showNode(); else showMap();
   }
   function openMenu() { $("#pause").hidden = false; }
+  function $$snd() { return Array.prototype.slice.call(document.querySelectorAll(".btn-snd")); }
 
   function init() {
-    $("#btn-start").addEventListener("click", newRun);
     $("#btn-continue").addEventListener("click", cont);
-    $("#btn-retry").addEventListener("click", newRun);
+    $("#btn-retry").addEventListener("click", function () { newRun(); });
     $("#btn-to-title").addEventListener("click", updateTitle);
     $("#btn-map-menu").addEventListener("click", openMenu);
     $("#btn-node-menu").addEventListener("click", openMenu);
     $("#btn-restart").addEventListener("click", function () { $("#pause").hidden = true; newRun(); });
+    var sndLabel = function () { return "소리: " + (SND && SND.on ? "켬" : "끔"); };
+    $$snd().forEach(function (b) {
+      b.textContent = sndLabel();
+      b.addEventListener("click", function () {
+        if (!SND) return;
+        SND.setOn(!SND.on);
+        $$snd().forEach(function (x) { x.textContent = sndLabel(); });
+        if (SND.on && run && !run.over && !$("#scr-title").classList.contains("active") && !$("#scr-result").classList.contains("active")) stageScene();
+      });
+    });
     $("#btn-quit").addEventListener("click", function () {
       A.abort(); save(); updateTitle(); A.show("scr-title");
     });
     updateTitle();
     window.__fcbRun = {
       get run() { return run; }, R: R, newRun: newRun, cont: cont, showMap: showMap, showNode: showNode, enterNode: enterNode,
-      result: result, save: save, loadSave: loadSave, battle: false,
+      result: result, save: save, loadSave: loadSave, battle: false, loadStages: loadStages, updateTitle: updateTitle,
     };
   }
   init();

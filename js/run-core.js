@@ -20,6 +20,17 @@
     store: { name: "저장고", line: "룬 상자가 반쯤 열려 있다." },
     watch: { name: "감시탑", line: "깃발 아래, 장군은 이미 이쪽을 보고 있다." },
     terrace: { name: "테라스", line: "밤바람 너머로 셀레스가 길을 막고 있다." },
+    // 스테이지 2 뒤집힌 홀 (docs/stage-2.md "방 한 줄")
+    mirror_gate: { name: "거울 현관", line: "바닥이 천장이다. 샹들리에가 발밑에서 흔들린다." },
+    ballroom: { name: "무도회장", line: "왈츠가 거꾸로 돈다. 꼭두각시는 박자를 놓치지 않는다." },
+    gallery: { name: "초상 회랑", line: "액자 속 얼굴이 모두 아래를 본다." },
+    card_table: { name: "카드 테이블", line: "엎어진 카드 한 장이 위를 보고 있다." },
+    workshop: { name: "인형 공방", line: "은실이 바닥에서 천장으로 늘어졌다." },
+    moon_hall: { name: "달빛 회랑", line: "달은 창 아래에 떴다." },
+    archive_stair: { name: "서고 계단", line: "책장이 거꾸로 꽂혀 있다. 글자는 바로 읽힌다." },
+    mirror_spring: { name: "거울 샘", line: "샘물은 아래에서 위로 떨어진다. 값을 내면 마실 수 있다." },
+    balcony: { name: "가고일 발코니", line: "가고일: 성벽은 밤에만 움직인다. 이 밤은 길다." },
+    queen_gate: { name: "성문 홀", line: "녹스: 여왕의 성문은 닫혀 있다. 지나가려면 내 근무를 끝내라." },
   };
 
   var KIND = {
@@ -111,6 +122,106 @@
     },
   };
 
+  // 스테이지 2 만남 (docs/stage-2.md 대사 그대로). reunion = 마리엘이 출전 중일 때
+  var MEET2 = {
+    mariel: {
+      room: "workshop",
+      open: [
+        ["마리엘", "무대가 뒤집혔다. 나는 마리엘. 이 홀은 내 덱의 것이다."],
+        ["아린", "왕관의 아린이다. 저택이 너희 성까지 삼켰나."],
+        ["마리엘", "성이 아니라 홀 하나. 여왕은 아직 저쪽에 있다."],
+        ["아리아", "그럼 이 은실은 누구 것이냐."],
+        ["마리엘", "내 것. 데려가면 끊지 않겠다."],
+      ],
+      full: [["저택", "이름을 더 받지 않는다."], ["마리엘", "실은 여기 묶어 둔다. 이름은 이미 둘이다."]],
+    },
+    serena: {
+      room: "moon_hall",
+      reunion: [
+        ["마리엘", "세레나. 박자를 또 혼자 세고 있었나."],
+        ["세레나", "마리엘. 네 실이 보여서 반 박자 늦췄어."],
+        ["세레나", "이 홀은 거꾸로 돌아. 그래도 춤은 같아."],
+      ],
+      open: [
+        ["세레나", "거꾸로 선 무도회장에 손님이라니. 나는 세레나."],
+        ["세라", "성역의 세라다. 칼을 든 무희는 처음 본다."],
+        ["세레나", "박자만 맞춰 줘. 나머지는 내가 벤다."],
+        ["아리아", "박자는 모른다. 약점이면 안다."],
+      ],
+      full: [["저택", "이름을 더 받지 않는다."], ["세레나", "이 곡은 다음 홀에서. 박자는 기억해 둘게."]],
+    },
+    odette: {
+      room: "archive_stair",
+      reunion: [
+        ["오데트", "마리엘. 네 이름은 이 홀 기록에 세 번 나온다."],
+        ["마리엘", "오데트. 그 기록, 이번엔 끝까지 적어."],
+        ["오데트", "제17조까지. 이 밤의 계약은 거기서 끝난다."],
+      ],
+      open: [
+        ["오데트", "기록관 오데트. 이 계단은 서고 쪽으로만 내려간다."],
+        ["아린", "위로 가야 한다. 문은 맨 위에 있다."],
+        ["오데트", "뒤집힌 홀에선 위가 아래다. 적어 둘게. 따라와."],
+      ],
+      full: [["저택", "이름을 더 받지 않는다."], ["오데트", "기록만 남긴다. 사람은 다음 장이다."]],
+    },
+  };
+
+  // 스테이지. open = 테스트(node tools/run-sim.js 100)를 통과해 타이틀 목록에 열린 것만 true.
+  // 수치(SCALE·적 수치)는 스테이지마다 같다. 스테이지 2 적은 스테이지 1 짝과 같은 수치·AI (이슈 1 보류).
+  var STAGES = {
+    1: {
+      no: 1, name: "균열 저택", door: "잿빛 왕관 · 헌트 나우", boss: "셀레스", open: true, bgm: null, bg: null,
+      plan: FLOOR_PLAN, packs: PACKS, battleRooms: BATTLE_ROOMS, floorLine: FLOOR_LINE, meet: MEET,
+      rooms: { elite: "watch", boss: "terrace", rest: "kitchen", treasure: "store", event: "banquet", first: "gate" },
+      win: "아린: “새벽은 우리 편이었어. 모두, 고마워.”", lose: "셀레스: “사냥은 끝났어. 다음엔 예고를 잘 봐.”",
+      winImg: "img/arin.png", loseImg: "img/celes.webp",
+    },
+    2: {
+      no: 2, name: "뒤집힌 홀", door: "미녀 덱", boss: "녹스", open: true, bgm: "sfx/bgm-stage2.mp3", bg: "img/stage2.webp",
+      plan: [
+        { kinds: ["battle", "battle"], tier: "t1" },
+        { kinds: ["battle", "event", "meet:mariel"], tier: "t1" },
+        { kinds: ["elite", "battle"], tier: "t2" },
+        { kinds: ["rest", "meet:serena", "event"], tier: "t2" },
+        { kinds: ["battle", "elite", "meet:odette"], tier: "t3" },
+        { kinds: ["boss"], tier: "boss" },
+      ],
+      packs: {
+        t1: [["puppet", "puppet"], ["bat", "puppet"]],
+        t2: [["bat", "bat"], ["puppet", "bat"]],
+        t3: [["bat", "bat"], ["puppet", "puppet"]],
+        ambush: [["puppet", "bat"]],
+        elite: [["puppet", "gargoyle"]],
+        boss: [["bat", "knox"]],
+      },
+      battleRooms: ["mirror_gate", "ballroom", "gallery", "card_table"],
+      floorLine: [
+        "거울 현관. 저택이 미녀 덱의 홀을 거꾸로 삼켰다.",
+        "왈츠가 거꾸로 돈다. 인형 공방에 은실이 보인다.",
+        "발코니의 석상이 눈을 뜬다.",
+        "달은 창 아래에 떴다. 샘과 카드가 기다린다.",
+        "서고 계단. 위로 가려면 내려가야 한다.",
+        "여왕의 성문. 녹스가 아직 근무 중이다.",
+      ],
+      meet: MEET2, reunionWith: "mariel",
+      rooms: { elite: "balcony", boss: "queen_gate", rest: "mirror_spring", treasure: "card_table", event: "card_table", first: "mirror_gate" },
+      win: "녹스가 대검을 내려놓았다. 홀이 바로 선다. 저택은 다음 문을 연다.",
+      lose: "홀이 셋을 거꾸로 쏟았다. 왈츠는 처음부터 다시 돈다.",
+      winImg: "img/mariel.webp", loseImg: "img/knox.webp",
+    },
+    3: { no: 3, name: "룬 밭", door: "룬 영토", open: false },
+    4: { no: 4, name: "성문 잔해", door: "잿빛 왕관", open: false },
+    5: { no: 5, name: "왕좌 너머", door: "저택이 삼킨 마지막 문", open: false },
+  };
+  function stageOf(run) { return STAGES[(run && run.stage) || 1] || STAGES[1]; }
+  function openStages() { return Object.keys(STAGES).map(Number).filter(function (n) { return STAGES[n].open; }); }
+  // 받침에 맞는 조사 (이/가, 은/는)
+  function josa(name, a, b) {
+    var c = name.charCodeAt(name.length - 1);
+    var has = c >= 0xac00 && c <= 0xd7a3 && (c - 0xac00) % 28 !== 0;
+    return name + (has ? a : b);
+  }
+
   // 보물·전술 (rift TACTICS "기합"·"수호"를 게이지 효과로 옮김. 피해 공식은 안 건드림)
   var BOONS = {
     rally: { name: "전술 · 기합", text: "공격·스킬 뒤 다른 아군 필살 게이지 +5", mod: true },
@@ -134,45 +245,49 @@
   }
   function pickOf(r, list) { return list[Math.floor(r() * list.length)]; }
 
-  function makeNode(r, kind, tier, used) {
+  function makeNode(r, kind, tier, used, st) {
+    st = st || STAGES[1];
+    var PK = st.packs, RM = st.rooms;
     if (kind.indexOf("meet:") === 0) {
       var who = kind.slice(5);
-      var n = { kind: "meet", who: who, room: MEET[who].room };
+      var n = { kind: "meet", who: who, room: st.meet[who].room };
       used.push(n.room);
       return n;
     }
     var n = { kind: kind };
     if (kind === "battle") {
-      var rooms = BATTLE_ROOMS.filter(function (x) { return used.indexOf(x) < 0; });
-      n.room = pickOf(r, rooms.length ? rooms : BATTLE_ROOMS);
+      var BR = st.battleRooms;
+      var rooms = BR.filter(function (x) { return used.indexOf(x) < 0; });
+      n.room = pickOf(r, rooms.length ? rooms : BR);
       // 같은 층 두 전투 칸은 다른 무리로
-      var packs = PACKS[tier].filter(function (pk) { return used.indexOf("pack:" + pk.join(",")) < 0; });
-      n.pack = pickOf(r, packs.length ? packs : PACKS[tier]).slice(); n.tier = tier;
+      var packs = PK[tier].filter(function (pk) { return used.indexOf("pack:" + pk.join(",")) < 0; });
+      n.pack = pickOf(r, packs.length ? packs : PK[tier]).slice(); n.tier = tier;
       used.push("pack:" + n.pack.join(","));
-    } else if (kind === "elite") { n.room = "watch"; n.pack = PACKS.elite[0].slice(); n.tier = "elite"; }
-    else if (kind === "boss") { n.room = "terrace"; n.pack = PACKS.boss[0].slice(); n.tier = "boss"; }
-    else if (kind === "rest") n.room = "kitchen";
-    else if (kind === "treasure") n.room = "store";
-    else if (kind === "event") n.room = "banquet";
+    } else if (kind === "elite") { n.room = RM.elite; n.pack = PK.elite[0].slice(); n.tier = "elite"; }
+    else if (kind === "boss") { n.room = RM.boss; n.pack = PK.boss[0].slice(); n.tier = "boss"; }
+    else if (kind === "rest") n.room = RM.rest;
+    else if (kind === "treasure") n.room = RM.treasure;
+    else if (kind === "event") n.room = RM.event;
     used.push(n.room);
     return n;
   }
 
-  function newRun(seed) {
+  function newRun(seed, stage) {
     if (seed == null) seed = (Date.now() & 0x7fffffff);
+    var st = STAGES[stage] && STAGES[stage].plan ? STAGES[stage] : STAGES[1];
     var r = rng(seed);
-    var map = FLOOR_PLAN.map(function (f) {
+    var map = st.plan.map(function (f) {
       var used = [];
       var kinds = f.kinds.slice();
       // 칸 순서만 섞는다 (종류 구성은 고정 → 난이도 일정)
       for (var i = kinds.length - 1; i > 0; i--) { var j = Math.floor(r() * (i + 1)); var t = kinds[i]; kinds[i] = kinds[j]; kinds[j] = t; }
-      return kinds.map(function (k) { return makeNode(r, k, f.tier, used); });
+      return kinds.map(function (k) { return makeNode(r, k, f.tier, used, st); });
     });
     var active = C.PARTY.slice();
     var party = {};
     active.forEach(function (id) { party[id] = { hp: C.CAST[id].hp, gauge: 0 }; });
     return {
-      v: 2, seed: seed, floor: 0, map: map, path: [], party: party,
+      v: 2, stage: st.no, seed: seed, floor: 0, map: map, path: [], party: party,
       active: active, roster: active.slice(), recruited: [],
       boons: [], over: null,
       stats: { battles: 0, rounds: 0, maxHit: 0, ults: 0, breaks: 0 },
@@ -187,7 +302,7 @@
 
   // 전투 설정 (arena-core create 옵션)
   function battleConfig(run, node, seed) {
-    var room = ROOMS[node.room] || ROOMS.gate;
+    var room = ROOMS[node.room] || ROOMS[stageOf(run).rooms.first];
     var ids = run.active && run.active.length === 3 ? run.active : C.PARTY.slice();
     var carry = {};
     ids.forEach(function (id) {
@@ -272,23 +387,24 @@
     });
   }
   function meetScript(run, who) {
-    var m = MEET[who];
+    var st = stageOf(run), m = st.meet[who];
     if (!m) return [];
     if (run.recruited.length >= 2) return m.full;
+    if (m.reunion && st.reunionWith && run.active.indexOf(st.reunionWith) >= 0) return m.reunion;
     if (who !== "garen") return m.open;
     if (run.active.indexOf("arin") >= 0) return m.arin;
     if (run.active.indexOf("sera") >= 0) return m.sera;
     return m.none;
   }
   function recruit(run, who, benchId) {
-    if (!MEET[who] || run.recruited.length >= 2) return null;
+    if (!stageOf(run).meet[who] || run.recruited.length >= 2) return null;
     if (run.roster.indexOf(who) >= 0) return null;
     if (run.active.indexOf(benchId) < 0) return null;
     run.roster.push(who);
     run.recruited.push(who);
     run.party[who] = { hp: C.CAST[who].hp, gauge: 0 };
     run.active[run.active.indexOf(benchId)] = who;
-    return C.CAST[who].name + "이 앞에 선다. " + C.CAST[benchId].name + "은 우물에서 쉰다.";
+    return josa(C.CAST[who].name, "이", "가") + " 앞에 선다. " + josa(C.CAST[benchId].name, "은", "는") + " 우물에서 쉰다.";
   }
   function setActive(run, ids) {
     if (!ids || ids.length !== 3) return false;
@@ -301,6 +417,11 @@
     return true;
   }
   function mapLine(run) {
+    var st = stageOf(run);
+    if (st.no !== 1) {
+      var l2 = st.floorLine[run.floor] || "다음 문을 고르세요.";
+      return run.floor === 0 ? l2 + " 문은 " + current(run).length + "개. 하나만 열 수 있다." : l2;
+    }
     var a = run.active || [];
     var both = function (x, y) { return a.indexOf(x) >= 0 && a.indexOf(y) >= 0; };
     if (run.floor === 1 && both("arin", "sera")) return "세라: 폐하, 성문 깃발은 아직 저쪽입니다. 아린: 알아. 오늘은 우리가 먼저다.";
@@ -311,17 +432,19 @@
     return line;
   }
   function eliteLine(run) {
+    if (stageOf(run).no !== 1) return ROOMS[stageOf(run).rooms.elite].line;
     if (run.active && run.active.indexOf("arin") >= 0) return "아린: 장군은 내 명을 듣던 자다. 그 명은 이미 더럽혀졌다.";
     return ROOMS.watch.line;
   }
 
   function validRun(o) {
-    return !!(o && o.v === 2 && Array.isArray(o.map) && o.map.length === FLOORS && o.party && Array.isArray(o.active) && o.active.length === 3 && typeof o.floor === "number" && !o.over);
+    return !!(o && o.v === 2 && (o.stage == null || (STAGES[o.stage] && STAGES[o.stage].open)) && Array.isArray(o.map) && o.map.length === FLOORS && o.party && Array.isArray(o.active) && o.active.length === 3 && typeof o.floor === "number" && !o.over);
   }
 
   var api = {
     SAVE_KEY: SAVE_KEY, FLOORS: FLOORS, ROOMS: ROOMS, KIND: KIND, PACKS: PACKS, FLOOR_PLAN: FLOOR_PLAN,
     SCALE: SCALE, BOONS: BOONS, REST: REST, AFTER: AFTER, EVENT: EVENT,
+    STAGES: STAGES, stageOf: stageOf, openStages: openStages, josa: josa, STAGE_KEY: "fcb-stages-v1",
     newRun: newRun, current: current, battleConfig: battleConfig, applyBattle: applyBattle,
     healAll: healAll, addGauge: addGauge, gainBoon: gainBoon, boonOffer: boonOffer, rollEvent: rollEvent,
     choose: choose, advance: advance, partySummary: partySummary, validRun: validRun, mods: mods, meetScript: meetScript, recruit: recruit, setActive: setActive, mapLine: mapLine, eliteLine: eliteLine,

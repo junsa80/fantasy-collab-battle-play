@@ -85,6 +85,28 @@
           fx: "dawn", colors: ["#e4f5c8", "#8fbf6a", "#142414"] },
       },
     },
+    // 스테이지 2 뒤집힌 홀 (docs/stage-2.md). 초상은 beauty-deck 재사용
+    serena: {
+      id: "serena", name: "세레나", title: "월무검사", origin: "deck", hp: 104, atk: 18,
+      color: "#b9c6ff", img: "img/serena.webp",
+      actions: {
+        attack: { name: "초승 베기", kind: "hit", pow: 1.0, desc: "단일 피해" },
+        skill: { name: "보름 일섬", kind: "hit", pow: 1.5, cd: 2, desc: "단일 강타 · 2턴" },
+        ult: { name: "닉스의 마지막 곡", kind: "hit", pow: 2.3, desc: "강타", voice: "이 곡은, 아침에 끝나요.",
+          fx: "crush", colors: ["#eef2ff", "#b9c6ff", "#1a2050"] },
+      },
+    },
+    odette: {
+      id: "odette", name: "오데트", title: "기록관", origin: "deck", hp: 96, atk: 15,
+      color: "#e0b46a", img: "img/odette.webp",
+      actions: {
+        attack: { name: "펜촉 찌르기", kind: "hit", pow: 0.9, desc: "단일 피해" },
+        skill: { name: "각주 달기", kind: "mark", pow: 0.4, cd: 3, turns: 2, desc: "약점 표시 2턴 · 3턴" },
+        ult: { name: "제17조", kind: "dawn", pow: 1.3, buff: 1.2, turns: 2,
+          desc: "아군 공격 ×1.2(2턴) + 일격", voice: "제17조. 이 밤은 여기서 끝난다.",
+          fx: "dawn", colors: ["#fff1d6", "#e0b46a", "#3a2614"] },
+      },
+    },
   };
 
   var ENEMY = {
@@ -92,7 +114,15 @@
     shadow_general: { id: "shadow_general", name: "그림자 장군", origin: "ashen", hp: 260, atk: 30, img: "img/shadow_general.png", pixel: true, ai: "general", boss: true, breakNeed: 45 },
     wolf: { id: "wolf", name: "서리 늑대", origin: "hunt", hp: 80, atk: 24, img: "img/wolf.webp", ai: "wolf" },
     celes: { id: "celes", name: "셀레스", title: "얼음 마녀", origin: "hunt", hp: 320, atk: 33, img: "img/celes.webp", ai: "celes", boss: true, breakNeed: 60 },
+    // 스테이지 2 (beauty-deck 그림 재사용). 수치·AI는 스테이지 1 짝과 같다. moves = 기술 이름만
+    puppet: { id: "puppet", name: "꼭두각시 인형", origin: "deck", hp: 70, atk: 24, img: "img/puppet.webp", ai: "grunt", moves: { hit: "실 당기기" } },
+    bat: { id: "bat", name: "흡혈 박쥐", origin: "deck", hp: 80, atk: 24, img: "img/bat.webp", ai: "wolf", moves: { hit: "흡혈 이빨" } },
+    gargoyle: { id: "gargoyle", name: "가고일", origin: "deck", hp: 260, atk: 30, img: "img/gargoyle.webp", ai: "general", boss: true, breakNeed: 45,
+      moves: { hit: "석조 발톱", charge: "석상의 포효", voice: "성벽이… 깨어난다." } },
+    knox: { id: "knox", name: "녹스", title: "해골 기사", origin: "deck", hp: 320, atk: 33, img: "img/knox.webp", ai: "celes", boss: true, breakNeed: 60,
+      moves: { hit: "녹슨 대검", pillar: "성문 내리치기", charge: "여왕의 경계령", voice: "성문은 닫혔다. 여왕의 경계령.", frost: "결박", enrage: "근무는 끝나지 않는다. — 기사의 예고" } },
   };
+  function mv(e, key, def) { var m = ENEMY[e.id].moves; return (m && m[key]) || def; }
 
   var WAVES = [
     { name: "잿빛 성문", enemies: ["shade", "shadow_general"], line: "그림자가… 명을 따른다." },
@@ -337,25 +367,25 @@
         return;
       }
       if (ai === "grunt") {
-        e.intent = { kind: "hit", name: "그림자 베기", pow: 1.0, target: pick(s, allies).uid };
+        e.intent = { kind: "hit", name: mv(e, "hit", "그림자 베기"), pow: 1.0, target: pick(s, allies).uid };
       } else if (ai === "wolf") {
-        e.intent = { kind: "hit", name: "서리 이빨", pow: 1.0, target: low.uid };
+        e.intent = { kind: "hit", name: mv(e, "hit", "서리 이빨"), pow: 1.0, target: low.uid };
       } else if (ai === "general") {
         if (e.t % 3 === 2) {
-          e.intent = { kind: "startCharge", name: "그림자 명령", turns: 1, pow: 1.15, need: ENEMY[e.id].breakNeed, text: "충전 시작 · 다음 턴 전체 공격", charge: true };
+          e.intent = { kind: "startCharge", name: mv(e, "charge", "그림자 명령"), turns: 1, pow: 1.15, need: ENEMY[e.id].breakNeed, text: "충전 시작 · 다음 턴 전체 공격", charge: true };
         } else {
-          e.intent = { kind: "hit", name: "흑철 일격", pow: 1.2, target: low.uid };
+          e.intent = { kind: "hit", name: mv(e, "hit", "흑철 일격"), pow: 1.2, target: low.uid };
         }
       } else if (ai === "celes") {
         var cyc = e.t % 4;
         if (!e.enraged && e.hp <= e.maxHp / 2) { cyc = 3; }
         if (cyc === 1) {
           // 얼음 기둥: 대상 예고 → 같은 턴 낙하
-          e.intent = { kind: "pillar", name: "얼음 기둥", pow: 2.0, target: pick(s, allies).uid, text: "대상 위 예고 · 방어하면 절반" };
+          e.intent = { kind: "pillar", name: mv(e, "pillar", "얼음 기둥"), pow: 2.0, target: pick(s, allies).uid, text: "대상 위 예고 · 방어하면 절반" };
         } else if (cyc === 3) {
-          e.intent = { kind: "startCharge", name: "서리 노바", turns: 2, pow: 1.25, frost: 2, need: ENEMY[e.id].breakNeed, text: "충전 시작 · 2턴 후 전체 + 빙결", charge: true, enrage: !e.enraged && e.hp <= e.maxHp / 2 };
+          e.intent = { kind: "startCharge", name: mv(e, "charge", "서리 노바"), turns: 2, pow: 1.25, frost: 2, need: ENEMY[e.id].breakNeed, text: "충전 시작 · 2턴 후 전체 + " + mv(e, "frost", "빙결"), charge: true, enrage: !e.enraged && e.hp <= e.maxHp / 2 };
         } else {
-          e.intent = { kind: "hit", name: "빙결 화살", pow: 1.1, target: low.uid };
+          e.intent = { kind: "hit", name: mv(e, "hit", "빙결 화살"), pow: 1.1, target: low.uid };
         }
       }
     });
@@ -372,7 +402,7 @@
       if (!it) return;
       if (it.kind === "stun") { e.stun = 0; ev.push({ type: "stunned", src: e.uid }); return; }
       if (it.kind === "startCharge") {
-        if (it.enrage) { e.enraged = true; ev.push({ type: "say", src: e.uid, text: "도망칠 곳은 없다. — 마녀의 예고" }); }
+        if (it.enrage) { e.enraged = true; ev.push({ type: "say", src: e.uid, text: mv(e, "enrage", "도망칠 곳은 없다. — 마녀의 예고") }); }
         e.charge = { name: it.name, turns: it.turns, pow: it.pow, frost: it.frost || 0, need: it.need, dealt: 0 };
         ev.push({ type: "charge", src: e.uid, name: it.name, turns: it.turns });
         return;
@@ -383,11 +413,11 @@
         return;
       }
       if (it.kind === "aoe") {
-        ev.push({ type: "enemyUse", src: e.uid, name: it.name, aoe: true, voice: e.id === "shadow_general" ? "그림자가… 명을 따른다." : "얼어붙어라. 서리 노바." });
+        ev.push({ type: "enemyUse", src: e.uid, name: it.name, aoe: true, voice: mv(e, "voice", e.id === "shadow_general" ? "그림자가… 명을 따른다." : "얼어붙어라. 서리 노바.") });
         e.charge = null;
         living(s.allies).forEach(function (a) {
           damage(s, e, a, it.pow, 1, ev, { big: true });
-          if (it.frost && a.alive) { a.frost = it.frost + 1; ev.push({ type: "frost", dst: a.uid }); }
+          if (it.frost && a.alive) { a.frost = it.frost + 1; a.frostName = mv(e, "frost", "빙결"); ev.push({ type: "frost", dst: a.uid, label: a.frostName }); }
         });
         return;
       }

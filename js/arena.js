@@ -151,7 +151,7 @@
       if (u.atkUpTurns > 0) st.push('<span class="tag atk">공↑' + u.atkUpTurns + "</span>");
       if (u.guard) st.push('<span class="tag guard">방어</span>');
       if (u.sanctum > 0) st.push('<span class="tag sanct">성역</span>');
-      if (u.frost > 0) st.push('<span class="tag frost">빙결</span>');
+      if (u.frost > 0) st.push('<span class="tag frost">' + esc(u.frostName || "빙결") + '</span>');
       $(".st", d).innerHTML = st.join("");
       var old = $(".aim", d); if (old) old.remove();
       var aim = aims[u.uid];
@@ -293,7 +293,9 @@
     b.style.animationDuration = sp(ms || 1600) + "ms";
     setTimeout(function () { b.hidden = true; }, sp(ms || 1600));
   }
+  function snd(n) { if (window.FCBSound) window.FCBSound.sfx(n); }
   function cutin(e) {
+    if (window.FCBSound) { window.FCBSound.sfx("ult"); window.FCBSound.voice(e.unit); }
     return new Promise(function (resolve) {
       var ci = $("#cutin"), cd = C.CAST[e.unit];
       ci.className = "cutin " + e.fx;
@@ -346,6 +348,7 @@
         u = C.find(S, e.dst); d = cardOf(e.dst);
         var src = C.find(S, e.src);
         if (src && src.side === "ally") slash(e.dst, C.CAST[src.id].color);
+        snd("hit");
         update();
         anim(d, "hitflash");
         anim(d, e.big ? "bigshake" : "shake");
@@ -355,6 +358,7 @@
         if (e.guard) setTimeout(function () { floatText(e.dst, "방어", "label"); }, 120);
         return delay(e.big ? 420 : 300);
       case "heal":
+        snd("heal");
         update(); floatText(e.dst, "+" + e.amount, "heal");
         return delay(220);
       case "revive":
@@ -366,6 +370,7 @@
         floatText(e.dst, u.side === "ally" ? "전투 불능" : "격파!", "label");
         return delay(300);
       case "mark":
+        snd("skill");
         update(); floatText(e.dst, "약점 표시", "label weak");
         return delay(260);
       case "guard":
@@ -383,7 +388,7 @@
         return delay(260);
       case "break":
         update();
-        floatText(e.dst, "BREAK!", "break");
+        floatText(e.dst, "BREAK!", "break"); snd("break");
         screenFlash("rgba(143,208,255,.45)"); vibrate(50);
         log("<b>브레이크!</b> " + esc(e.skill) + " 저지 — 기절");
         return delay(520);
@@ -400,7 +405,7 @@
         if (e.pillar) { pillar(e.dst); return delay(380); }
         return delay(260);
       case "frost":
-        floatText(e.dst, "빙결", "label");
+        floatText(e.dst, e.label || "빙결", "label");
         return delay(80);
       case "charge":
         u = C.find(S, e.src); update();
@@ -496,6 +501,10 @@
     $("#btn-resume").addEventListener("click", function () { paused = false; $("#pause").hidden = true; });
     $$(".abtn").forEach(function (b) { b.addEventListener("click", function () { onAction(b.dataset.key); }); });
     setFx(settings.fx, true);
+    document.addEventListener("click", function (ev) {
+      var b = ev.target.closest && ev.target.closest("button");
+      if (b && !b.disabled) snd("click");
+    }, true);
     window.__fcb = {
       core: C, state: null, start: start, settings: settings, show: show, banner: banner, esc: esc, hash: hash,
       setFx: setFx, fxLabel: fxLabel, vibrate: vibrate,

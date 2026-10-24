@@ -35,10 +35,12 @@
       </div>
       <div class="title-actions">
         <button type="button" class="btn primary big" id="btn-continue" hidden>이어하기<small id="continue-sub"></small></button>
-        <button type="button" class="btn primary big" id="btn-start">런 시작<small id="start-sub">6층 · 방을 골라 보스 셀레스까지</small></button>
+        <div class="stage-list" id="stage-list" aria-label="스테이지"></div>
+        <p class="stage-shut" id="stage-shut"></p>
         <div class="sub-row">
           <button type="button" class="btn ghost" id="btn-howto" aria-expanded="false">조작법</button>
           <button type="button" class="btn ghost" id="btn-fx">연출: 보통</button>
+          <button type="button" class="btn ghost btn-snd" id="btn-snd">소리: 켬</button>
         </div>
         <div class="howto" id="howto" hidden>
           <ol>
@@ -56,7 +58,7 @@
     <!-- 런 지도 (방 선택) -->
     <section id="scr-map" class="screen" aria-label="방 선택">
       <header class="topbar">
-        <div class="tb-wave"><b id="map-floor">1층 / 6층</b><span id="map-sub">균열 저택 · 다음 방을 고르세요</span></div>
+        <div class="tb-wave"><b id="map-floor">1층 / 6층</b><span id="map-sub">다음 방을 고르세요</span></div>
         <div class="tb-round" id="map-boons">전술 없음</div>
         <button type="button" class="btn icon" id="btn-map-menu" aria-label="메뉴">Ⅱ</button>
       </header>
@@ -135,10 +137,12 @@
         <button type="button" class="btn primary big" id="btn-resume">계속</button>
         <button type="button" class="btn" id="btn-restart">새 런 시작</button>
         <button type="button" class="btn" id="btn-fx2">연출: 보통</button>
+        <button type="button" class="btn btn-snd" id="btn-snd2">소리: 켬</button>
         <button type="button" class="btn" id="btn-quit">타이틀로 <small>(방 앞에서 이어하기)</small></button>
       </div>
     </div>
   </div>
+  <script src="js/sound.js"></script>
   <script src="js/arena-core.js"></script>
   <script src="js/arena.js"></script>
   <script src="js/run-core.js"></script>
