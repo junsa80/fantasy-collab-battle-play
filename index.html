@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b0f18" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22%3E%3Cpath d=%22M8 44 L16 18 L26 34 L32 12 L38 34 L48 18 L56 44 Z%22 fill=%22%23e4b547%22/%3E%3Crect x=%228%22 y=%2246%22 width=%2248%22 height=%228%22 fill=%22%238fd0ff%22/%3E%3C/svg%3E" />
+  <title>환상 콜라보 — 균열 아레나</title>
+  <link rel="stylesheet" href="css/arena.css" />
+</head>
+<body>
+  <div id="app">
+    <!-- 타이틀 -->
+    <section id="scr-title" class="screen active" aria-label="타이틀">
+      <div class="title-art" aria-hidden="true">
+        <div class="ta-rift"></div>
+        <img class="ta-hero ta-sera px" src="img/sera.png" alt="" />
+        <img class="ta-hero ta-aria" src="img/aria.webp" alt="" />
+        <img class="ta-hero ta-arin px" src="img/arin.png" alt="" />
+        <div class="ta-vs">VS</div>
+        <div class="ta-foes">
+          <img class="px" src="img/shadow_general.png" alt="" />
+          <img src="img/celes.webp" alt="" />
+        </div>
+      </div>
+      <div class="logo">
+        <span class="logo-kicker">CROSSOVER BATTLE</span>
+        <h1>환상 콜라보</h1>
+        <p class="logo-sub">균열 아레나</p>
+      </div>
+      <div class="chips">
+        <span class="chip ashen">잿빛 왕관 · 아린 · 세라</span>
+        <span class="chip hunt">헌트 나우 · 아리아</span>
+      </div>
+      <div class="title-actions">
+        <button type="button" class="btn primary big" id="btn-start">전투 시작</button>
+        <div class="sub-row">
+          <button type="button" class="btn ghost" id="btn-howto" aria-expanded="false">조작법</button>
+          <button type="button" class="btn ghost" id="btn-fx">연출: 보통</button>
+        </div>
+        <div class="howto" id="howto" hidden>
+          <ol>
+            <li>위쪽 <b>적을 탭</b>하면 집중 대상이 바뀝니다.</li>
+            <li>아래 버튼으로 <b>공격 · 스킬 · 방어 · 필살기</b> 중 하나를 고르세요. 아군 3명이 행동하면 적 차례입니다.</li>
+            <li>적 카드 아래 <b>예고</b>를 보세요. ⚠ 충전 중인 적은 피해를 모으면 <b>브레이크</b>로 끊을 수 있어요.</li>
+            <li>게이지가 차면 <b>필살기</b>. 「부위 분쇄」는 충전을 바로 부숩니다.</li>
+          </ol>
+        </div>
+      </div>
+    </section>
+
+    <!-- 전투 -->
+    <section id="scr-battle" class="screen" aria-label="전투">
+      <header class="topbar">
+        <div class="tb-wave"><b id="tb-wave">웨이브 1/2</b><span id="tb-wname">잿빛 성문</span></div>
+        <div class="tb-round" id="tb-round">라운드 1</div>
+        <button type="button" class="btn icon" id="btn-pause" aria-label="일시정지">Ⅱ</button>
+      </header>
+      <div class="enemy-row" id="enemy-row"></div>
+      <div class="log" id="log" aria-live="polite"></div>
+      <div class="ally-row" id="ally-row"></div>
+      <div class="actions" id="actions">
+        <div class="act-head" id="act-head"></div>
+        <div class="act-grid">
+          <button type="button" class="abtn" data-key="attack"><b></b><small></small></button>
+          <button type="button" class="abtn" data-key="skill"><b></b><small></small></button>
+          <button type="button" class="abtn" data-key="guard"><b>방어</b><small>받는 피해 절반 · 게이지+</small></button>
+          <button type="button" class="abtn ult" data-key="ult"><b></b><small></small><i class="ult-fill"></i></button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 결과 -->
+    <section id="scr-result" class="screen" aria-label="결과">
+      <div class="result-box">
+        <img id="res-img" class="res-img" src="img/arin.png" alt="" />
+        <div class="res-title" id="res-title"></div>
+        <p class="res-line" id="res-line"></p>
+        <div class="res-stats" id="res-stats"></div>
+        <p class="res-tip" id="res-tip"></p>
+        <div class="res-actions">
+          <button type="button" class="btn primary big" id="btn-retry">다시 도전</button>
+          <button type="button" class="btn" id="btn-to-title">타이틀로</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 오버레이 -->
+    <div id="fx" class="fx-layer" aria-hidden="true"></div>
+    <div id="banner" class="banner" hidden></div>
+    <div id="cutin" class="cutin" hidden>
+      <div class="ci-bg"></div>
+      <div class="ci-rays"></div>
+      <div class="ci-band"></div>
+      <img class="ci-img" alt="" />
+      <div class="ci-text">
+        <span class="ci-origin"></span>
+        <div class="ci-name"></div>
+        <div class="ci-voice"></div>
+      </div>
+    </div>
+    <div id="pause" class="modal" hidden role="dialog" aria-label="일시정지">
+      <div class="modal-box">
+        <div class="modal-title">일시정지</div>
+        <button type="button" class="btn primary big" id="btn-resume">계속</button>
+        <button type="button" class="btn" id="btn-restart">처음부터 다시</button>
+        <button type="button" class="btn" id="btn-fx2">연출: 보통</button>
+        <button type="button" class="btn" id="btn-quit">타이틀로</button>
+      </div>
+    </div>
+  </div>
+  <script src="js/arena-core.js"></script>
+  <script src="js/arena.js"></script>
+</body>
+</html>
