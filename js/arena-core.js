@@ -227,6 +227,10 @@
       need: function (ids) { return has(ids, "odette") && has(ids, "noel"); } },
   ];
   SYN.push(
+    { id: "bandage", name: "군영의 붕대", desc: "세라 없이 · 매 라운드 끝 최저 HP 아군 +12%", line: "아서: 붕대는 내가 감는다. 방패는 내려놓지 마라.",
+      need: function (ids) { return !has(ids, "sera") && cnt(ids, ["garen", "arthur", "kael"]) >= 2; } },
+    { id: "liferune", name: "생명의 칸", desc: "세라 없이 · 레오 필살 → 전원 +15% · 첫 회 부활", line: "레오: 칸에 이름을 새기면, 그 사람은 다시 선다.",
+      need: function (ids) { return !has(ids, "sera") && has(ids, "leo") && (has(ids, "noel") || has(ids, "lin")); } },
     { id: "decree", name: "왕의 조항", desc: "두 서약 버프가 겹친다 · 필살 → 서로 게이지 +30", line: "오데트: 폐하의 서약 아래, 제17조를 읽겠습니다.",
       need: function (ids) { return has(ids, "arin") && has(ids, "odette"); } },
     { id: "audit", name: "성역의 장부", desc: "노엘 표시 → 세라 게이지 +10", line: "노엘: 치유 값은 장부에서 빼 두지. 마음껏 써.",
@@ -234,7 +238,7 @@
     { id: "hunt", name: "패와 사냥", desc: "마리엘 표시 +1턴 · 아리아 게이지 +25 · 분쇄 ×1.2", line: "아리아: 네 카드가 가리키는 데를 부순다.",
       need: function (ids) { return has(ids, "aria") && has(ids, "mariel"); } }
   );
-  var SYN_WHO = {"knights": ["arin", "sera", "garen", "arthur", "kael"], "stage": ["mariel", "serena", "odette"], "survey": ["leo", "noel", "lin"], "finisher": ["aria", "mariel", "odette", "noel", "kael", "leo", "serena", "lin"], "shield": ["sera", "garen", "kael"], "ledgers": ["noel", "kael"], "banquet": ["arin", "mariel"], "side": ["arin", "garen"], "clause": ["odette", "noel"], "decree": ["arin", "odette"], "audit": ["sera", "noel"], "hunt": ["aria", "mariel"]};
+  var SYN_WHO = {"knights": ["arin", "sera", "garen", "arthur", "kael"], "stage": ["mariel", "serena", "odette"], "survey": ["leo", "noel", "lin"], "finisher": ["aria", "mariel", "odette", "noel", "kael", "leo", "serena", "lin"], "shield": ["sera", "garen", "kael"], "ledgers": ["noel", "kael"], "banquet": ["arin", "mariel"], "side": ["arin", "garen"], "clause": ["odette", "noel"], "decree": ["arin", "odette"], "audit": ["sera", "noel"], "hunt": ["aria", "mariel"], "bandage": ["garen", "arthur", "kael"], "liferune": ["leo", "noel", "lin"]};
   SYN.forEach(function (c) { c.who = SYN_WHO[c.id] || []; });
   function synergyOf(ids) { ids = ids || []; return SYN.filter(function (c) { return c.need(ids); }).map(function (c) { return c.id; }); }
   function SY(s, k) { return !!(s.syn && s.syn[k]); }
@@ -418,6 +422,7 @@
       u.gauge = Math.min(100, u.gauge + GAUGE.guard + (s.mods.guardPlus || 0) + (P(u, "breath") ? 10 : 0));
       ev.push({ type: "guard", dst: u.uid });
       if (P(u, "breath")) heal(u, Math.round(u.maxHp * 0.12), ev);
+      if (P(u, "mend")) { var lo = lowestHp(living(s.allies)); heal(lo, Math.round(lo.maxHp * 0.12), ev); }
       if (SY(s, "knights") && CAST[u.id].origin === "ashen") living(s.allies).forEach(function (m) { if (m !== u) m.gauge = Math.min(100, m.gauge + 8); });
     } else {
       var a = CAST[u.id].actions[key];
@@ -442,6 +447,9 @@
       var buddy = function (id, n) { living(s.allies).forEach(function (m) { if (m.id === id && m !== u) m.gauge = Math.min(100, m.gauge + n); }); };
       if (key === "ult" && SY(s, "decree")) { if (u.id === "arin") buddy("odette", 30); if (u.id === "odette") buddy("arin", 30); }
       if (key === "skill" && a.kind === "mark" && u.id === "noel" && SY(s, "audit")) buddy("sera", 10);
+      if (key === "skill" && a.kind === "mark" && P(u, "markheal")) living(s.allies).forEach(function (m) { if (m.hp < m.maxHp) heal(m, Math.round(m.maxHp * 0.05), ev); });
+      if (key === "ult" && P(u, "ultheal")) living(s.allies).forEach(function (m) { if (m.hp < m.maxHp) heal(m, Math.round(m.maxHp * 0.12), ev); });
+      if (key === "ult" && u.id === "leo" && SY(s, "liferune")) { var rv = s.liferune ? 0 : 0.25; s.liferune = 1; s.allies.forEach(function (m) { heal(m, Math.round(m.maxHp * 0.15), ev, rv); }); }
       if (key === "skill" && a.kind === "mark" && u.id === "mariel" && SY(s, "hunt")) buddy("aria", 25);
       if (key === "skill" && a.kind === "mark" && u.id === "mariel" && SY(s, "banquet")) buddy("arin", 20);
       if (key === "ult") {
@@ -598,6 +606,7 @@
     ev = ev.concat(end);
     if (s.phase === "enemy") {
       s.round += 1; s.stats.rounds = s.round;
+      if (SY(s, "bandage")) { var bl = lowestHp(living(s.allies)); if (bl && bl.hp < bl.maxHp) heal(bl, Math.round(bl.maxHp * 0.12), ev); }
       s.allies.concat(s.enemies).forEach(function (u) {
         u.guard = false;
         if (u.cd > 0) u.cd -= 1;
