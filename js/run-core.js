@@ -90,6 +90,19 @@
     t1: { hp: 1.0, atk: 1.0 }, t2: { hp: 1.15, atk: 1.1 }, t3: { hp: 1.35, atk: 1.25 },
     ambush: { hp: 1.1, atk: 1.05 }, elite: { hp: 1.2, atk: 1.1 }, boss: { hp: 1.6, atk: 1.4 },
   };
+  // 난이도: 적 HP·공격 배율만 (층 보정 SCALE 위에 곱한다). 보통 = 1 그대로, 다른 수치는 건드리지 않는다
+  var DIFF_KEY = "fcb-diff-v1";
+  var DIFF = {
+    normal: { name: "보통", hp: 1, atk: 1 },
+    hard: { name: "하드", hp: 1.25, atk: 1.1 },
+  };
+  function diffOf(run) { return run && run.diff === "hard" ? "hard" : "normal"; }
+  // 적 배율 = 층 보정 × 난이도. 보통이면 층 보정 그대로 (곱하지 않음 → 보통 결과 그대로)
+  function enemyScale(run, tier) {
+    var sc = SCALE[tier] || SCALE.t1;
+    if (diffOf(run) !== "hard") return sc;
+    return { hp: sc.hp * DIFF.hard.hp, atk: sc.atk * DIFF.hard.atk };
+  }
   var BATTLE_ROOMS = ["servants", "banquet", "armory", "store"];
 
   // 층 설계: 층마다 고를 수 있는 칸 종류 (seed 로 방·무리만 섞는다). 마지막은 보스 고정.
@@ -534,7 +547,7 @@
     return n;
   }
 
-  function newRun(seed, stage) {
+  function newRun(seed, stage, diff) {
     if (seed == null) seed = (Date.now() & 0x7fffffff);
     var st = STAGES[stage] && STAGES[stage].plan ? STAGES[stage] : STAGES[1];
     var r = rng(seed);
@@ -549,7 +562,7 @@
     var party = {};
     active.forEach(function (id) { party[id] = { hp: C.CAST[id].hp, gauge: 0 }; });
     return {
-      v: 2, stage: st.no, seed: seed, floor: 0, map: map, path: [], party: party,
+      v: 2, stage: st.no, diff: diff === "hard" ? "hard" : "normal", seed: seed, floor: 0, map: map, path: [], party: party,
       active: active, roster: active.slice(), recruited: [],
       boons: [], over: null,
       stats: { battles: 0, rounds: 0, maxHit: 0, ults: 0, breaks: 0 },
@@ -575,7 +588,7 @@
       seed: seed,
       party: ids,
       waves: [{ name: room.name, enemies: node.pack.slice(), line: room.line,
-        hpMul: (SCALE[node.tier] || SCALE.t1).hp, atkMul: (SCALE[node.tier] || SCALE.t1).atk }],
+        hpMul: enemyScale(run, node.tier).hp, atkMul: enemyScale(run, node.tier).atk }],
       carry: carry,
       mods: mods(run),
     };
@@ -706,7 +719,7 @@
 
   var api = {
     SAVE_KEY: SAVE_KEY, FLOORS: FLOORS, ROOMS: ROOMS, KIND: KIND, PACKS: PACKS, FLOOR_PLAN: FLOOR_PLAN,
-    SCALE: SCALE, BOONS: BOONS, REST: REST, AFTER: AFTER, EVENT: EVENT,
+    SCALE: SCALE, DIFF: DIFF, DIFF_KEY: DIFF_KEY, diffOf: diffOf, enemyScale: enemyScale, BOONS: BOONS, REST: REST, AFTER: AFTER, EVENT: EVENT,
     STAGES: STAGES, stageOf: stageOf, openStages: openStages, josa: josa, STAGE_KEY: "fcb-stages-v1",
     newRun: newRun, current: current, battleConfig: battleConfig, applyBattle: applyBattle,
     healAll: healAll, addGauge: addGauge, gainBoon: gainBoon, boonOffer: boonOffer, rollEvent: rollEvent,

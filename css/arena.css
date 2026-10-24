@@ -402,6 +402,12 @@ img.px, .px img { image-rendering: pixelated; }
 .stage-shut { margin: -2px 0 0; text-align: center; font-size: 12px; color: var(--muted); }
 .stage-shut:empty { display: none; }
 .sub-row { grid-template-columns: 1fr 1fr 1fr; }
+/* 난이도 (보통 기본 · 하드 = 적 HP·공격 배율만) */
+.diff-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.diff-row .btn.diff { min-height: 44px; padding: 4px 8px; font-size: 15px; background: transparent; opacity: .75; }
+.diff-row .btn.diff small { display: inline; margin: 0 0 0 6px; white-space: nowrap; }
+.diff-row .btn.diff[aria-pressed="true"] { opacity: 1; background: rgba(27,42,74,.8); border-color: var(--gold); color: var(--gold); }
+#btn-diff-hard[aria-pressed="true"] { border-color: #e0605a; color: #ff9a8f; background: rgba(74,20,20,.65); }
 .sub-row .btn { font-size: 14px; padding-left: 4px; padding-right: 4px; }
 /* 스테이지 배경: 지도·조우·전투 화면 뒤에 어둡게 깐다 */
 body[data-stage="2"] #scr-map, body[data-stage="2"] #scr-node, body[data-stage="2"] #scr-battle {

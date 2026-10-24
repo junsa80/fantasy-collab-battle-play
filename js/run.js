@@ -52,7 +52,10 @@
   }
 
   // ---------- 공통 ----------
-  function floorText() { return (Math.min(run.floor, R.FLOORS - 1) + 1) + "층 / " + R.FLOORS + "층"; }
+  function floorText() { return (Math.min(run.floor, R.FLOORS - 1) + 1) + "층 / " + R.FLOORS + "층" + (R.diffOf(run) === "hard" ? " · 하드" : ""); }
+  // 난이도 선택 (타이틀). 기본 보통. 기록 키 fcb-diff-v1
+  function loadDiff() { try { return localStorage.getItem(R.DIFF_KEY) === "hard" ? "hard" : "normal"; } catch (e) { return "normal"; } }
+  function saveDiff(d) { try { localStorage.setItem(R.DIFF_KEY, d); } catch (e) {} }
   function partyHtml() {
     return R.partySummary(run).map(function (p) {
       var cd = C.CAST[p.id];
@@ -235,7 +238,7 @@
     }
 
     if (fightPack) {
-      var sc = R.SCALE[scale] || R.SCALE.t1;
+      var sc = R.enemyScale(run, scale);
       var foes = document.createElement("div"); foes.className = "foes";
       foes.innerHTML = fightPack.map(function (id) {
         var e = C.ENEMY[id];
@@ -297,9 +300,15 @@
     var st = run.stats, sg = stage();
     leaveScene();
     if (SND) SND.sfx(win ? "win" : "lose");
-    if (win) { var rec = loadStages(); rec.clears[sg.no] = (rec.clears[sg.no] || 0) + 1; saveStages(rec); }
+    var hard = R.diffOf(run) === "hard";
+    if (win) {
+      var rec = loadStages();
+      if (hard) { rec.hard = rec.hard || {}; rec.hard[sg.no] = (rec.hard[sg.no] || 0) + 1; }
+      else rec.clears[sg.no] = (rec.clears[sg.no] || 0) + 1;
+      saveStages(rec);
+    }
     var t = $("#res-title");
-    t.textContent = win ? (sg.no === 1 ? "균열 봉인!" : sg.name + " 돌파!") : "패배…";
+    t.textContent = (win ? (sg.no === 1 ? "균열 봉인!" : sg.name + " 돌파!") : "패배…") + (hard ? " · 하드" : "");
     t.className = "res-title " + (win ? "win" : "lose");
     var img = $("#res-img");
     img.src = win ? sg.winImg : sg.loseImg;
@@ -326,27 +335,33 @@
     var sv = loadSave();
     var c = $("#btn-continue");
     c.hidden = !sv;
-    if (sv) $("#continue-sub").textContent = R.stageOf(sv).name + " · " + (Math.min(sv.floor, R.FLOORS - 1) + 1) + "층 · " + R.partySummary(sv).map(function (p) { return p.name + " " + p.hp; }).join(" · ");
+    if (sv) $("#continue-sub").textContent = R.stageOf(sv).name + (R.diffOf(sv) === "hard" ? " · 하드" : "") + " · " + (Math.min(sv.floor, R.FLOORS - 1) + 1) + "층 · " + R.partySummary(sv).map(function (p) { return p.name + " " + p.hp; }).join(" · ");
     var rec = loadStages();
     var list = $("#stage-list"); list.innerHTML = "";
     var shut = [];
     Object.keys(R.STAGES).map(Number).forEach(function (n) {
       var st = R.STAGES[n];
       if (!st.open) { shut.push(n + " " + st.name); return; }
-      var cl = rec.clears[n] ? " · 클리어 " + rec.clears[n] : "";
+      var cl = (rec.clears[n] ? " · 클리어 " + rec.clears[n] : "") + (rec.hard && rec.hard[n] ? " · 하드 " + rec.hard[n] : "");
       var b = btn(n + " · " + st.name, (sv ? "새로 시작 · " : "") + st.door + " · 보스 " + st.boss + cl, "stage" + (!sv && n === rec.last ? " primary" : ""), function () { newRun(n); }, n === 1 ? "btn-start" : "btn-stage-" + n);
       b.dataset.stage = n;
       list.appendChild(b);
     });
     $("#stage-shut").textContent = shut.length ? shut.join(" · ") + " — 준비 중" : "";
+    var d = loadDiff();
+    $("#btn-diff-normal").setAttribute("aria-pressed", d === "normal" ? "true" : "false");
+    $("#btn-diff-hard").setAttribute("aria-pressed", d === "hard" ? "true" : "false");
+    $("#diff-hard-sub").textContent = "적 HP×" + R.DIFF.hard.hp + " 공격×" + R.DIFF.hard.atk;
   }
   function newRun(stageNo) {
+    // 목록에서 새로 시작 = 타이틀에서 고른 난이도. 다시 하기(번호 없음) = 그 런의 난이도
+    var diff = typeof stageNo === "number" ? loadDiff() : R.diffOf(run);
     A.abort();
     if (typeof stageNo !== "number") stageNo = run && run.stage ? run.stage : loadStages().last || 1;
     if (!R.STAGES[stageNo] || !R.STAGES[stageNo].open) stageNo = 1;
     var rec = loadStages(); rec.last = stageNo; saveStages(rec);
     var seed = A.hash.seed != null ? Number(A.hash.seed) : undefined;
-    run = R.newRun(seed, stageNo);
+    run = R.newRun(seed, stageNo, diff);
     save();
     showMap();
   }
@@ -360,6 +375,8 @@
 
   function init() {
     $("#btn-continue").addEventListener("click", cont);
+    $("#btn-diff-normal").addEventListener("click", function () { saveDiff("normal"); updateTitle(); });
+    $("#btn-diff-hard").addEventListener("click", function () { saveDiff("hard"); updateTitle(); });
     $("#btn-retry").addEventListener("click", function () { newRun(); });
     $("#btn-to-title").addEventListener("click", updateTitle);
     $("#btn-map-menu").addEventListener("click", openMenu);
@@ -381,7 +398,7 @@
     updateTitle();
     window.__fcbRun = {
       get run() { return run; }, R: R, newRun: newRun, cont: cont, showMap: showMap, showNode: showNode, enterNode: enterNode,
-      result: result, save: save, loadSave: loadSave, battle: false, loadStages: loadStages, updateTitle: updateTitle,
+      result: result, save: save, loadSave: loadSave, battle: false, loadStages: loadStages, updateTitle: updateTitle, loadDiff: loadDiff,
     };
   }
   init();
