@@ -31,6 +31,17 @@
     mirror_spring: { name: "거울 샘", line: "샘물은 아래에서 위로 떨어진다. 값을 내면 마실 수 있다." },
     balcony: { name: "가고일 발코니", line: "가고일: 성벽은 밤에만 움직인다. 이 밤은 길다." },
     queen_gate: { name: "성문 홀", line: "녹스: 여왕의 성문은 닫혀 있다. 지나가려면 내 근무를 끝내라." },
+    // 스테이지 3 룬 밭 (docs/stage-3.md "방 한 줄")
+    field_gate: { name: "밭 어귀", line: "밭고랑마다 룬이 하나씩 박혀 있다." },
+    furrow: { name: "룬 고랑", line: "고랑을 밟을 때마다 글자가 빛난다." },
+    ring_road: { name: "고리 길", line: "길은 시계 방향으로만 돈다." },
+    scarecrow: { name: "허수아비 칸", line: "빈 칸에 이름표만 걸려 있다." },
+    inn: { name: "여행자 쉼터", line: "모닥불 옆에 펼친 지도 한 장." },
+    ledger_shed: { name: "장부 헛간", line: "헛간 벽에 월급이 적혀 있다." },
+    survey_post: { name: "측량 말뚝", line: "말뚝마다 눈금이 새겨져 있다." },
+    rune_spring: { name: "룬 샘", line: "샘 바닥에 치유의 룬이 가라앉아 있다. 값을 내면 마실 수 있다." },
+    gate_ruin: { name: "관문 터", line: "관문 파괴자: 닫힌 칸은 부수면 열린다." },
+    storm_hill: { name: "폭풍 언덕", line: "폭풍 거인: 이 밭의 칸은 전부 내 하늘 아래다." },
   };
 
   var KIND = {
@@ -166,6 +177,50 @@
     },
   };
 
+  // 스테이지 3 만남 (docs/stage-3.md 대사 그대로). reunion = 레오가 출전 중일 때
+  var MEET3 = {
+    leo: {
+      room: "inn",
+      open: [
+        ["레오", "여기는 내 밭이다. 나는 레오. 룬 영토에서 칸을 걷던 사람이다."],
+        ["아린", "왕관의 아린이다. 이 밭도 저택이 삼켰나."],
+        ["레오", "고리째로. 길이 시계 방향으로만 돈다."],
+        ["아리아", "거꾸로 걸으면 어떻게 되지."],
+        ["레오", "칸이 너를 잊는다. 데려가면 길을 알려 주겠다."],
+      ],
+      full: [["저택", "이름을 더 받지 않는다."], ["레오", "지도는 두고 간다. 이름은 이미 둘이다."]],
+    },
+    noel: {
+      room: "ledger_shed",
+      reunion: [
+        ["노엘", "레오. 네 칸 값은 아직 장부에 남아 있다."],
+        ["레오", "노엘. 오늘은 갚으러 온 게 아니다. 같이 걷자."],
+        ["노엘", "좋다. 대신 이 밭의 값은 내가 적는다."],
+      ],
+      open: [
+        ["노엘", "감사 노엘이다. 이 헛간에 들어온 사람은 다 적힌다."],
+        ["세라", "성역의 세라다. 무엇을 적나."],
+        ["노엘", "누가 칸을 지켰고, 누가 칸을 버렸는지."],
+        ["아리아", "그럼 적어라. 우리는 지킨다."],
+      ],
+      full: [["저택", "이름을 더 받지 않는다."], ["노엘", "이름은 장부에만 둔다. 자리는 이미 찼다."]],
+    },
+    lin: {
+      room: "survey_post",
+      reunion: [
+        ["린", "레오. 이 말뚝, 네가 박은 거지. 눈금이 틀렸어."],
+        ["레오", "린. 그래서 네가 필요했다."],
+        ["린", "이름은 재고 나서 붙여. 따라갈게."],
+      ],
+      open: [
+        ["린", "측량사 린. 이 밭이 원래 무엇이었는지부터 재야 해."],
+        ["아린", "지금은 싸움터다. 그걸로 충분하지 않나."],
+        ["린", "충분하지 않아. 그래도 같이 재 줄게."],
+      ],
+      full: [["저택", "이름을 더 받지 않는다."], ["린", "눈금만 남길게. 다음 칸에서 다시 재자."]],
+    },
+  };
+
   // 스테이지. open = 테스트(node tools/run-sim.js 100)를 통과해 타이틀 목록에 열린 것만 true.
   // 수치(SCALE·적 수치)는 스테이지마다 같다. 스테이지 2 적은 스테이지 1 짝과 같은 수치·AI (이슈 1 보류).
   var STAGES = {
@@ -209,7 +264,39 @@
       lose: "홀이 셋을 거꾸로 쏟았다. 왈츠는 처음부터 다시 돈다.",
       winImg: "img/mariel.webp", loseImg: "img/knox.webp",
     },
-    3: { no: 3, name: "룬 밭", door: "룬 영토", open: false },
+    3: {
+      no: 3, name: "룬 밭", door: "룬 영토", boss: "폭풍 거인", open: true, bgm: "sfx/bgm-stage3.mp3", bg: "img/stage3.webp",
+      plan: [
+        { kinds: ["battle", "battle"], tier: "t1" },
+        { kinds: ["battle", "event", "meet:leo"], tier: "t1" },
+        { kinds: ["elite", "battle"], tier: "t2" },
+        { kinds: ["rest", "meet:noel", "event"], tier: "t2" },
+        { kinds: ["battle", "elite", "meet:lin"], tier: "t3" },
+        { kinds: ["boss"], tier: "boss" },
+      ],
+      packs: {
+        t1: [["moss_turtle", "moss_turtle"], ["ember_fox", "moss_turtle"]],
+        t2: [["ember_fox", "ember_fox"], ["moss_turtle", "ember_fox"]],
+        t3: [["ember_fox", "ember_fox"], ["moss_turtle", "moss_turtle"]],
+        ambush: [["moss_turtle", "ember_fox"]],
+        elite: [["moss_turtle", "gate_breaker"]],
+        boss: [["ember_fox", "tempest_giant"]],
+      },
+      battleRooms: ["field_gate", "furrow", "ring_road", "scarecrow"],
+      floorLine: [
+        "밭 어귀. 저택이 룬 영토의 들판을 통째로 삼켰다.",
+        "고리 길이 시작된다. 모닥불 옆에 지도가 보인다.",
+        "관문 터. 닫힌 칸 앞에 뿔 달린 그림자가 선다.",
+        "헛간과 샘. 쉼에도 값이 적힌다.",
+        "측량 말뚝. 이름 없는 칸이 하나 남았다.",
+        "폭풍 언덕. 거인이 하늘에서 칸을 긋는다.",
+      ],
+      meet: MEET3, reunionWith: "leo",
+      rooms: { elite: "gate_ruin", boss: "storm_hill", rest: "rune_spring", treasure: "scarecrow", event: "scarecrow", first: "field_gate" },
+      win: "폭풍이 걷혔다. 칸마다 이름이 돌아온다. 저택은 다음 문을 연다.",
+      lose: "밭이 셋을 고리 밖으로 밀어냈다. 칸은 다시 이름을 잃는다.",
+      winImg: "img/leo.webp", loseImg: "img/tempest_giant.webp",
+    },
     4: { no: 4, name: "성문 잔해", door: "잿빛 왕관", open: false },
     5: { no: 5, name: "왕좌 너머", door: "저택이 삼킨 마지막 문", open: false },
   };

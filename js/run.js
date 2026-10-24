@@ -19,6 +19,10 @@
     bat: "가장 다친 아군을 문다",
     gargoyle: "⚠ 석상의 포효(전체) 충전 → 피해를 모아 BREAK",
     knox: "⬇ 성문 내리치기 예고 · ⚠ 여왕의 경계령 충전(전체+결박)",
+    moss_turtle: "무작위 한 명을 들이받는다",
+    ember_fox: "가장 다친 아군을 문다",
+    gate_breaker: "⚠ 관문 부수기(전체) 충전 → 피해를 모아 BREAK",
+    tempest_giant: "⚡ 낙뢰 예고 · ⚠ 폭풍 부르기 충전(전체+감전)",
   };
   function eliteName(n) { var id = n.pack.filter(function (x) { return C.ENEMY[x].boss; })[0]; return id ? C.ENEMY[id].name : "강적"; }
   var KIND_DESC = {

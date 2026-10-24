@@ -107,6 +107,28 @@
           fx: "dawn", colors: ["#fff1d6", "#e0b46a", "#3a2614"] },
       },
     },
+    // 스테이지 3 룬 밭 (docs/stage-3.md). 초상은 rune-territories 재사용
+    noel: {
+      id: "noel", name: "노엘", title: "감사", origin: "rune", hp: 112, atk: 15,
+      color: "#6f8fb8", img: "img/noel.webp",
+      actions: {
+        attack: { name: "장부 치기", kind: "hit", pow: 1.0, desc: "단일 피해" },
+        skill: { name: "감사 표시", kind: "mark", pow: 0.45, cd: 3, turns: 2, desc: "약점 표시 2턴 · 3턴" },
+        ult: { name: "닫힌 장부", kind: "dawn", pow: 1.3, buff: 1.25, turns: 2,
+          desc: "아군 공격 ×1.25(2턴) + 일격", voice: "장부는 닫혔다. 이제 받을 차례다.",
+          fx: "dawn", colors: ["#e6eef8", "#6f8fb8", "#14203a"] },
+      },
+    },
+    lin: {
+      id: "lin", name: "린", title: "측량사", origin: "rune", hp: 100, atk: 19,
+      color: "#a8c070", img: "img/lin.webp",
+      actions: {
+        attack: { name: "측량봉", kind: "hit", pow: 1.0, desc: "단일 피해" },
+        skill: { name: "눈금 찌르기", kind: "hit", pow: 1.5, cd: 2, desc: "단일 강타 · 2턴" },
+        ult: { name: "이름 없는 칸", kind: "hit", pow: 2.2, desc: "강타", voice: "이 칸의 이름은, 내가 잰다.",
+          fx: "crush", colors: ["#f0f6dc", "#a8c070", "#1f2a12"] },
+      },
+    },
   };
 
   var ENEMY = {
@@ -122,6 +144,13 @@
     knox: { id: "knox", name: "녹스", title: "해골 기사", origin: "deck", hp: 320, atk: 33, img: "img/knox.webp", ai: "celes", boss: true, breakNeed: 60,
       moves: { hit: "녹슨 대검", pillar: "성문 내리치기", charge: "여왕의 경계령", voice: "성문은 닫혔다. 여왕의 경계령.", frost: "결박", enrage: "근무는 끝나지 않는다. — 기사의 예고" } },
   };
+  // 스테이지 3 (rune-territories 카드 그림 재사용). 수치·AI는 스테이지 1 짝과 같다
+  ENEMY.moss_turtle = { id: "moss_turtle", name: "이끼거북", origin: "rune", hp: 70, atk: 24, img: "img/moss_turtle.webp", ai: "grunt", moves: { hit: "등껍질 박치기" } };
+  ENEMY.ember_fox = { id: "ember_fox", name: "불꽃여우", origin: "rune", hp: 80, atk: 24, img: "img/ember_fox.webp", ai: "wolf", moves: { hit: "불꽃 이빨" } };
+  ENEMY.gate_breaker = { id: "gate_breaker", name: "관문 파괴자", origin: "rune", hp: 260, atk: 30, img: "img/gate_breaker.webp", ai: "general", boss: true, breakNeed: 45,
+    moves: { hit: "파성 망치", charge: "관문 부수기", voice: "닫힌 칸은… 부수면 열린다." } };
+  ENEMY.tempest_giant = { id: "tempest_giant", name: "폭풍 거인", origin: "rune", hp: 320, atk: 33, img: "img/tempest_giant.webp", ai: "celes", boss: true, breakNeed: 60,
+    moves: { hit: "번개 주먹", pillar: "낙뢰", charge: "폭풍 부르기", voice: "폭풍이 칸을 지운다.", frost: "감전", enrage: "하늘이 칸을 다시 긋는다. — 거인의 예고" } };
   function mv(e, key, def) { var m = ENEMY[e.id].moves; return (m && m[key]) || def; }
 
   var WAVES = [
