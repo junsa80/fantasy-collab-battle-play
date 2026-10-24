@@ -129,6 +129,28 @@
           fx: "crush", colors: ["#f0f6dc", "#a8c070", "#1f2a12"] },
       },
     },
+    // 스테이지 4 성문 잔해 (docs/stage-4.md). 초상은 srpg-prototype 픽셀 초상 재사용
+    arthur: {
+      id: "arthur", name: "아서", title: "성기사", origin: "ashen", hp: 118, atk: 18,
+      color: "#d8c27a", img: "img/arthur.png", pixel: true,
+      actions: {
+        attack: { name: "기사검", kind: "hit", pow: 1.0, desc: "단일 피해" },
+        skill: { name: "길잡이 일격", kind: "hit", pow: 1.4, cd: 2, desc: "단일 강타 · 2턴" },
+        ult: { name: "왕성의 길", kind: "dawn", pow: 1.4, buff: 1.2, turns: 2,
+          desc: "아군 공격 ×1.2(2턴) + 일격", voice: "길은 내가 안다. 따라와!",
+          fx: "dawn", colors: ["#fff6d8", "#d8c27a", "#2a2412"] },
+      },
+    },
+    kael: {
+      id: "kael", name: "카엘", title: "아머나이트", origin: "ashen", hp: 120, atk: 15,
+      color: "#7f9cc8", img: "img/kael.png", pixel: true,
+      actions: {
+        attack: { name: "창 찌르기", kind: "hit", pow: 1.0, desc: "단일 피해" },
+        skill: { name: "하르트만의 장부", kind: "mark", pow: 0.45, cd: 3, turns: 2, desc: "약점 표시 2턴 · 3턴" },
+        ult: { name: "무너지지 않는 창", kind: "hit", pow: 2.0, desc: "강타", voice: "하르트만은 아직 무너지지 않았다.",
+          fx: "crush", colors: ["#e6eef8", "#7f9cc8", "#141e30"] },
+      },
+    },
   };
 
   var ENEMY = {
@@ -151,6 +173,12 @@
     moves: { hit: "파성 망치", charge: "관문 부수기", voice: "닫힌 칸은… 부수면 열린다." } };
   ENEMY.tempest_giant = { id: "tempest_giant", name: "폭풍 거인", origin: "rune", hp: 320, atk: 33, img: "img/tempest_giant.webp", ai: "celes", boss: true, breakNeed: 60,
     moves: { hit: "번개 주먹", pillar: "낙뢰", charge: "폭풍 부르기", voice: "폭풍이 칸을 지운다.", frost: "감전", enrage: "하늘이 칸을 다시 긋는다. — 거인의 예고" } };
+  // 스테이지 4 (srpg-prototype 초상 재사용). 수치·AI는 스테이지 1 짝과 같다. 그림자 병사는 기존 shade 그대로
+  ENEMY.shadow_spear = { id: "shadow_spear", name: "그림자 창병", origin: "ashen", hp: 80, atk: 24, img: "img/shadow_spear.png", pixel: true, ai: "wolf", moves: { hit: "그림자 창" } };
+  ENEMY.shadow_knight = { id: "shadow_knight", name: "그림자 기사", origin: "ashen", hp: 260, atk: 30, img: "img/shadow_knight.png", pixel: true, ai: "general", boss: true, breakNeed: 45,
+    moves: { hit: "흑기사 참격", charge: "그림자 돌격", voice: "누각은… 그림자의 것이다." } };
+  ENEMY.gatekeeper = { id: "gatekeeper", name: "요새 문지기", origin: "ashen", hp: 320, atk: 33, img: "img/gatekeeper.png", pixel: true, ai: "celes", boss: true, breakNeed: 60,
+    moves: { hit: "철문 방패", pillar: "성문 낙하", charge: "성문 봉쇄", voice: "이 문은 닫힌다. 성문 봉쇄.", frost: "속박", enrage: "열쇠는 없다. — 문지기의 예고" } };
   function mv(e, key, def) { var m = ENEMY[e.id].moves; return (m && m[key]) || def; }
 
   var WAVES = [

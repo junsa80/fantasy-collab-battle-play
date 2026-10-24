@@ -23,6 +23,9 @@
     ember_fox: "가장 다친 아군을 문다",
     gate_breaker: "⚠ 관문 부수기(전체) 충전 → 피해를 모아 BREAK",
     tempest_giant: "⚡ 낙뢰 예고 · ⚠ 폭풍 부르기 충전(전체+감전)",
+    shadow_spear: "가장 다친 아군을 찌른다",
+    shadow_knight: "⚠ 그림자 돌격(전체) 충전 → 피해를 모아 BREAK",
+    gatekeeper: "⬇ 성문 낙하 예고 · ⚠ 성문 봉쇄 충전(전체+속박)",
   };
   function eliteName(n) { var id = n.pack.filter(function (x) { return C.ENEMY[x].boss; })[0]; return id ? C.ENEMY[id].name : "강적"; }
   var KIND_DESC = {

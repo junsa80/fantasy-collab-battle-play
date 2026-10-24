@@ -42,6 +42,17 @@
     rune_spring: { name: "룬 샘", line: "샘 바닥에 치유의 룬이 가라앉아 있다. 값을 내면 마실 수 있다." },
     gate_ruin: { name: "관문 터", line: "관문 파괴자: 닫힌 칸은 부수면 열린다." },
     storm_hill: { name: "폭풍 언덕", line: "폭풍 거인: 이 밭의 칸은 전부 내 하늘 아래다." },
+    // 스테이지 4 성문 잔해 (docs/stage-4.md "방 한 줄")
+    ash_gate: { name: "잿빛 현관", line: "성문 잔해 위로 재가 내린다." },
+    broken_bridge: { name: "끊어진 다리", line: "다리 반쪽이 해자에 잠겼다." },
+    watch_post: { name: "초소 터", line: "횃불은 꺼졌고 창만 서 있다." },
+    banner_hall: { name: "깃발 홀", line: "찢어진 왕관 깃발이 바닥에 깔려 있다." },
+    guardhouse: { name: "수비대 막사", line: "방패걸이에 하나만 비어 있다." },
+    chapel_ruin: { name: "무너진 예배당", line: "성기사의 맹세문이 반쯤 타 있다." },
+    record_room: { name: "기록실", line: "성문 장부가 펼쳐진 채 굳었다." },
+    moat_well: { name: "해자 우물", line: "해자 물은 차다. 값을 내면 상처를 씻을 수 있다." },
+    gatehouse: { name: "성문 누각", line: "그림자 기사: 이 누각은 그림자의 것이다." },
+    great_gate: { name: "큰 성문", line: "요새 문지기: 열쇠는 넘겼다. 이 문은 이제 아무도 지나가지 못한다." },
   };
 
   var KIND = {
@@ -221,6 +232,52 @@
     },
   };
 
+  // 스테이지 4 만남 (docs/stage-4.md 대사 그대로). reunion = 아린·세라·가렌 중 한 명이라도 출전
+  var MEET4 = {
+    garen: {
+      room: "guardhouse",
+      reunion: [
+        ["가렌", "폐하. 이번엔 방패도 함께 떨어졌소."],
+        ["아린", "가렌. 여기는 네가 지키던 성문이다."],
+        ["가렌", "그래서 내가 먼저 서겠소. 잔해는 내가 잘 아오."],
+      ],
+      open: [
+        ["가렌", "왕관 문장도 없는 이들이 성문 잔해에 왔군."],
+        ["아리아", "헌터 아리아다. 길만 알면 된다."],
+        ["가렌", "길은 무너졌소. 대신 내가 앞에 서겠소."],
+      ],
+      full: [["저택", "이름을 더 받지 않는다."], ["가렌", "방패는 성문에 두겠소. 이름은 이미 둘이오."]],
+    },
+    arthur: {
+      room: "chapel_ruin",
+      reunion: [
+        ["아서", "아린. 왕성이 무너진 날, 길은 내가 안다고 했지."],
+        ["아린", "아서. 이번에도 길을 아나."],
+        ["아서", "잔해 사이 길이라면. 따라와."],
+      ],
+      open: [
+        ["아서", "성기사 아서다. 이 문은 내가 지키던 문이 아니다."],
+        ["아리아", "그럼 누가 지켰지."],
+        ["아서", "문지기다. 지금은 그림자에게 열쇠를 넘겼다."],
+      ],
+      full: [["저택", "이름을 더 받지 않는다."], ["아서", "길만 알려 주마. 사람은 다음 문이다."]],
+    },
+    kael: {
+      room: "record_room",
+      reunion: [
+        ["카엘", "하르트만의 카엘입니다. 성문 장부는 아직 제 손에 있습니다."],
+        ["세라", "카엘. 그 장부를 끝까지 들고 왔군요."],
+        ["카엘", "들고 왔습니다. 이제 갑옷으로 앞을 막겠습니다."],
+      ],
+      open: [
+        ["카엘", "하르트만의 카엘. 몰락한 집안이지만 갑옷은 아직 무겁다."],
+        ["아리아", "무거운 건 좋다. 앞에 서라."],
+        ["카엘", "그러려고 왔다."],
+      ],
+      full: [["저택", "이름을 더 받지 않는다."], ["카엘", "장부는 내가 들고 있겠다. 자리는 이미 찼다."]],
+    },
+  };
+
   // 스테이지. open = 테스트(node tools/run-sim.js 100)를 통과해 타이틀 목록에 열린 것만 true.
   // 수치(SCALE·적 수치)는 스테이지마다 같다. 스테이지 2 적은 스테이지 1 짝과 같은 수치·AI (이슈 1 보류).
   var STAGES = {
@@ -297,7 +354,39 @@
       lose: "밭이 셋을 고리 밖으로 밀어냈다. 칸은 다시 이름을 잃는다.",
       winImg: "img/leo.webp", loseImg: "img/tempest_giant.webp",
     },
-    4: { no: 4, name: "성문 잔해", door: "잿빛 왕관", open: false },
+    4: {
+      no: 4, name: "성문 잔해", door: "잿빛 왕관", boss: "요새 문지기", open: true, bgm: "sfx/bgm-stage4.mp3", bg: "img/stage4.webp",
+      plan: [
+        { kinds: ["battle", "battle"], tier: "t1" },
+        { kinds: ["battle", "event", "meet:garen"], tier: "t1" },
+        { kinds: ["elite", "battle"], tier: "t2" },
+        { kinds: ["rest", "meet:arthur", "event"], tier: "t2" },
+        { kinds: ["battle", "elite", "meet:kael"], tier: "t3" },
+        { kinds: ["boss"], tier: "boss" },
+      ],
+      packs: {
+        t1: [["shade", "shade"], ["shadow_spear", "shade"]],
+        t2: [["shadow_spear", "shadow_spear"], ["shade", "shadow_spear"]],
+        t3: [["shadow_spear", "shadow_spear"], ["shade", "shade"]],
+        ambush: [["shade", "shadow_spear"]],
+        elite: [["shade", "shadow_knight"]],
+        boss: [["shadow_spear", "gatekeeper"]],
+      },
+      battleRooms: ["ash_gate", "broken_bridge", "watch_post", "banner_hall"],
+      floorLine: [
+        "잿빛 현관. 저택이 무너진 성문까지 삼켰다.",
+        "끊어진 다리. 막사에 빈 방패걸이가 보인다.",
+        "성문 누각. 그림자 기사가 깃발을 든다.",
+        "예배당과 우물. 맹세에도 값이 있다.",
+        "기록실. 성문을 연 이름이 적혀 있다.",
+        "큰 성문. 문지기가 열쇠 없이 버틴다.",
+      ],
+      meet: MEET4, reunionWith: ["arin", "sera", "garen"],
+      rooms: { elite: "gatehouse", boss: "great_gate", rest: "moat_well", treasure: "banner_hall", event: "banner_hall", first: "ash_gate" },
+      win: "큰 성문이 열렸다. 잿빛 왕관의 길이 다시 이어진다. 저택은 마지막 문만 남았다.",
+      lose: "성문 잔해가 셋을 덮었다. 재가 가라앉으면 문은 다시 닫힌다.",
+      winImg: "img/garen.webp", loseImg: "img/gatekeeper.png",
+    },
     5: { no: 5, name: "왕좌 너머", door: "저택이 삼킨 마지막 문", open: false },
   };
   function stageOf(run) { return STAGES[(run && run.stage) || 1] || STAGES[1]; }
@@ -477,8 +566,9 @@
     var st = stageOf(run), m = st.meet[who];
     if (!m) return [];
     if (run.recruited.length >= 2) return m.full;
-    if (m.reunion && st.reunionWith && run.active.indexOf(st.reunionWith) >= 0) return m.reunion;
-    if (who !== "garen") return m.open;
+    var rw = [].concat(st.reunionWith || []);
+    if (m.reunion && rw.some(function (id) { return run.active.indexOf(id) >= 0; })) return m.reunion;
+    if (!m.arin) return m.open;   // 스테이지 1 가렌만 아린/세라/아리아 갈래가 따로 있다
     if (run.active.indexOf("arin") >= 0) return m.arin;
     if (run.active.indexOf("sera") >= 0) return m.sera;
     return m.none;

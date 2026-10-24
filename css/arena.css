@@ -407,3 +407,6 @@ body[data-stage="2"] #scr-map, body[data-stage="2"] #scr-node, body[data-stage="
 body[data-stage="3"] #scr-map, body[data-stage="3"] #scr-node, body[data-stage="3"] #scr-battle {
   background: linear-gradient(180deg, rgba(11,15,24,.55) 0%, rgba(11,15,24,.78) 45%, rgba(11,15,24,.92) 100%), url("../img/stage3.webp") center top / cover no-repeat;
 }
+body[data-stage="4"] #scr-map, body[data-stage="4"] #scr-node, body[data-stage="4"] #scr-battle {
+  background: linear-gradient(180deg, rgba(11,15,24,.55) 0%, rgba(11,15,24,.78) 45%, rgba(11,15,24,.92) 100%), url("../img/stage4.webp") center top / cover no-repeat;
+}
