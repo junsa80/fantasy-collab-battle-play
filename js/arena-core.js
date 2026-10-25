@@ -305,6 +305,8 @@
       });
     }
     if (opts.syn && opts.syn.length) { s.syn = {}; opts.syn.forEach(function (k) { s.syn[k] = 1; }); }
+    // 승천 규칙 「치유 약화」 (run-core ASC): 아군이 받는 회복 × healMul. 키가 있을 때만
+    if (s.mods.healMul != null) s.allies.forEach(function (u) { u.healMul = s.mods.healMul; });
     s.allies.forEach(function (u) {
       if (P(u, "vanguard") && u.alive) u.gauge = Math.min(100, u.gauge + 25);
       if (u.gx && u.gx.gauge && u.alive) u.gauge = Math.min(100, u.gauge + u.gx.gauge);
@@ -405,6 +407,7 @@
       amt = Math.max(amt, Math.round(u.maxHp * revive));
       ev.push({ type: "revive", dst: u.uid });
     }
+    if (u.healMul != null && amt > 0) amt = Math.max(1, Math.round(amt * u.healMul));
     var before = u.hp;
     u.hp = Math.min(u.maxHp, u.hp + amt);
     ev.push({ type: "heal", dst: u.uid, amount: u.hp - before });

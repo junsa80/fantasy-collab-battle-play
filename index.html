@@ -29,6 +29,7 @@
         <span class="logo-kicker">CROSSOVER BATTLE</span>
         <h1>환상 콜라보</h1>
         <p class="logo-sub">균열 저택</p>
+        <p class="logo-title" id="logo-title" hidden></p>
         <p class="logo-line" id="logo-line">같은 밤, 세 세계가 한 저택으로 떨어졌다.</p>
       </div>
       <div class="chips">
@@ -137,6 +138,7 @@
       <div class="gear-list" id="gear-list"></div>
       <div class="gear-actions">
         <button type="button" class="btn primary" id="btn-gear-auto">⚙ 자동 장착</button>
+        <button type="button" class="btn" id="btn-gear-craft" aria-pressed="false">🔨 제작·강화</button>
         <button type="button" class="btn" id="btn-gear-codex">📖 도감</button>
         <button type="button" class="btn ghost" id="btn-gear-back">돌아가기</button>
       </div>
@@ -168,6 +170,18 @@
       <button type="button" class="btn ghost" id="btn-quest-back">타이틀로</button>
     </section>
 
+    <section id="scr-chal" class="screen" aria-label="도전">
+      <header class="topbar">
+        <div class="tb-wave"><b>🏆 도전</b><span id="chal-sub">승천 · 오늘의 런 · 업적</span></div>
+      </header>
+      <div class="codex-tabs chal-tabs">
+        <button type="button" class="btn" id="ch-tab-asc" aria-pressed="true">⛰ 승천</button>
+        <button type="button" class="btn" id="ch-tab-daily" aria-pressed="false">📅 오늘</button>
+        <button type="button" class="btn" id="ch-tab-ach" aria-pressed="false">🏆 업적</button>
+      </div>
+      <div class="codex-list" id="chal-list"></div>
+      <button type="button" class="btn ghost" id="btn-chal-back">돌아가기</button>
+    </section>
     <section id="scr-result" class="screen" aria-label="결과">
       <div class="result-box">
         <img id="res-img" class="res-img" src="img/arin.png" alt="" />
@@ -177,6 +191,7 @@
         <p class="res-tip" id="res-tip"></p>
         <div class="res-grow" id="res-grow" hidden></div>
         <div class="res-actions">
+          <button type="button" class="btn primary big" id="btn-next" hidden>다음 스테이지 ▶</button>
           <button type="button" class="btn primary big" id="btn-retry">새 런 도전</button>
           <button type="button" class="btn" id="btn-to-title">타이틀로</button>
         </div>

@@ -61,6 +61,12 @@
   // 난이도 선택 (타이틀). 기본 보통. 기록 키 fcb-diff-v1
   function loadDiff() { try { return localStorage.getItem(R.DIFF_KEY) === "hard" ? "hard" : "normal"; } catch (e) { return "normal"; } }
   function saveDiff(d) { try { localStorage.setItem(R.DIFF_KEY, d); } catch (e) {} }
+  // 승천 (docs/STAGES.md 「승천」): 하드에서만. 고른 단계는 열린 단계까지로 자른다
+  var ASC_KEY = "fcb-asc";
+  function loadAsc(m) { var a = 0; try { a = Number(localStorage.getItem(ASC_KEY)) || 0; } catch (e) {} return Math.max(0, Math.min(a, M.ascOpen(m || loadMeta()), R.ASC_MAX)); }
+  function saveAsc(a) { try { localStorage.setItem(ASC_KEY, String(a)); } catch (e) {} }
+  // 지금 고른 판의 승천 (하드 · 스테이지 · 오늘의 런 아님)
+  function pickAsc(p) { return p && !p.quest && !p.daily && loadDiff() === "hard" ? loadAsc() : 0; }
   function partyHtml() {
     return R.partySummary(run).map(function (p) {
       var cd = C.CAST[p.id];
@@ -252,8 +258,8 @@
       body.innerHTML = (p.talked ? '<p class="room-msg talk"><b>' + esc(C.CAST[p.talked.id].name) + "</b> " + esc(p.talked.line) + "</p>" +
         '<p class="room-rule">모닥불 대화 · ' + esc(C.CAST[p.talked.id].name) + " 경험치 +" + M.BOND_XP + (p.talked.up ? " · Lv" + p.talked.up + "!" : "") + "</p>" : "") +
         '<p class="room-msg">우물물은 차갑다. 둘 중 하나만 할 시간이 있다.</p>';
-      acts.appendChild(btn("우물 · 회복", "전원 최대 HP 50% 회복", "primary", function () {
-        var got = R.healAll(run, R.REST.heal);
+      acts.appendChild(btn("우물 · 회복", "전원 최대 HP " + Math.round(R.restHeal(run) * 100) + "% 회복", "primary", function () {
+        var got = R.healAll(run, R.restHeal(run));
         doneMsg("우물물로 상처를 씻었다. " + Object.keys(got).map(function (id) { return C.CAST[id].name + " +" + got[id]; }).join(" · "));
       }, "rest-heal"));
       acts.appendChild(btn("명상 · 집중", "전원 필살 게이지 +" + R.REST.gauge, "", function () {
@@ -362,7 +368,8 @@
         if (res === "lose" || res === "win") { save(); return result(); }
         var p = run.pending;
         var downs = S.allies.filter(function (u) { return !u.alive; }).length;
-        var msg = "승리! 라운드 " + S.round + (downs ? " · 쓰러진 아군은 HP " + Math.round(R.AFTER.reviveHp * 100) + "%로 일어났다" : "") + " · 필살 게이지는 절반만 이어진다.";
+        var arl = R.ascOf(run) ? R.ascRules(run) : null, rvp = arl && arl.revive != null ? arl.revive : R.AFTER.reviveHp, kgp = arl && arl.keepGauge != null ? arl.keepGauge : R.AFTER.keepGauge;
+        var msg = "승리! 라운드 " + S.round + (downs ? " · 쓰러진 아군은 HP " + Math.round(rvp * 100) + "%로 일어났다" : "") + (kgp ? " · 필살 게이지는 절반만 이어진다." : " · 필살 게이지는 이어지지 않는다 (승천).");
         if (node.kind === "elite") {
           p.reward = R.boonOffer(run, run.seed * 7 + run.floor);
           var gd = gearDrop("elite", run.seed * 13 + run.floor);
@@ -396,7 +403,7 @@
       saveStages(rec);
     }
     var t = $("#res-title");
-    t.textContent = (win ? (run.quest ? "「" + sg.name + "」 완료!" : sg.no === 1 ? "균열 봉인!" : sg.name + " 돌파!") : "패배…") + (hard ? " · 하드" : "");
+    t.textContent = (win ? (run.quest ? "「" + sg.name + "」 완료!" : sg.no === 1 ? "균열 봉인!" : sg.name + " 돌파!") : "패배…") + (hard ? " · 하드" : "") + (run.asc ? " · 승천 " + run.asc : "") + (run.daily ? " · 오늘의 런" : "");
     t.className = "res-title " + (win ? "win" : "lose");
     var img = $("#res-img");
     img.src = win ? sg.winImg : sg.loseImg;
@@ -412,7 +419,11 @@
       ? (run.quest ? questRewardText(run.questRes) : "최대 피해 " + st.maxHit + " · 총 " + st.rounds + "라운드. 강적 방을 더 들러 보세요.")
       : (Math.min(run.floor, R.floorsOf(run) - 1) + 1) + "층에서 쓰러졌어요. 팁: 보스 전엔 ⛲ 휴식, ⚠ 충전은 「부위 분쇄」로 끊기.";
     $("#res-tip").classList.toggle("quest-reward", !!(win && run.quest));
-    $("#btn-retry").textContent = run.quest ? "의뢰 다시 도전" : "새 런 도전";
+    $("#btn-retry").textContent = run.quest ? "의뢰 다시 도전" : run.daily ? "오늘의 런 다시" : "새 런 도전";
+    var nx = win && !run.quest && !run.daily && R.STAGES[sg.no + 1] && R.STAGES[sg.no + 1].open ? sg.no + 1 : 0, nb = $("#btn-next");
+    nb.hidden = !nx; $(".res-actions").classList.toggle("has-next", !!nx);
+    $("#btn-retry").classList.toggle("primary", !nx);
+    if (nx) { nb.dataset.stage = nx; nb.textContent = "다음 스테이지 ▶ " + nx + " · " + R.STAGES[nx].name; }
     run.over = run.over || "lose";
     // 성장: 런마다 한 번 (져도). 새 저장도 경험치는 쌓인다
     if (!run.awarded) {
@@ -427,6 +438,12 @@
       }
       var mm = loadMeta();
       run.growRes = M.award(mm, run);
+      // 반복 동기 (docs/GROWTH.md 「반복」): 조각(져도) · 승천 · 오늘의 런 · 업적
+      M.recordRun(mm, run);
+      run.shardRes = M.addShards(mm, M.runShards(run));
+      if (win && hard && !run.quest && !run.daily) run.ascRes = M.ascWin(mm, run.asc | 0, run.seed);
+      if (run.daily) run.dailyRes = M.dailyResult(mm, run);
+      run.achRes = M.checkAch(mm, { stages: loadStages(), quests: Q.progress(loadQuest()) });
       run.awarded = 1;
       saveMeta(mm);
     }
@@ -469,6 +486,7 @@
     grs.forEach(function (g, i) {
       h += '<div class="rg-gear r' + M.GEAR[g].tier + '" id="rg-gear' + (i ? "-" + i : "") + '">' + (M.GEAR[g].tier === 4 ? "◆ 유니크 장비" : "🎒 " + M.rarity(g) + " 장비") + " 「" + esc(M.GEAR[g].name) + "」 " + (M.GEAR[g].tier < 4 ? M.stars(g) + " " : "") + "· " + esc(M.GEAR[g].text) + " — 자동 장착</div>";
     });
+    h += replayLine();
     if (res.relics && res.relics.length) h += '<div class="rg-relic">유물 해금 · ' + res.relics.map(function (id) { return esc(R.BOONS[id].name.replace("유물 · ", "")); }).join(" · ") + " — 보물 고르기에 섞인다</div>";
     var pend = null;
     m.unlocked.some(function (id) { var t = M.pending(m, id); if (t.length) { pend = { id: id, t: t[0] }; return true; } return false; });
@@ -476,6 +494,24 @@
     box.innerHTML = h; box.hidden = false;
     $("#scr-result").classList.add("grow");
     bindPerk(box, function () { renderGrow(); });
+  }
+  // 결과 한 줄: 조각 · 승천 · 오늘의 런 · 업적
+  function replayLine() {
+    var p = [], m = loadMeta();
+    if (run.shardRes) p.push("🔹 조각 +" + run.shardRes + (run.over === "win" ? "" : " (져도 쌓인다)"));
+    var a = run.ascRes;
+    if (a) {
+      if (a.first) p.push("⛰ 승천 " + run.asc + " 첫 돌파 🔹+" + a.shards);
+      if (a.opened) p.push("승천 " + a.opened + " 열림");
+      if (a.unique) p.push("◆ 「" + esc(M.GEAR[a.unique].name) + "」");
+    }
+    var d = run.dailyRes;
+    if (d) p.push("📅 오늘 기록 " + (d.rec.win ? "승리" : d.rec.floor + "층") + (d.best ? " (최고!)" : "") + (d.shards ? " · 오늘 보상 🔹+" + d.shards : ""));
+    var ac = (run.achRes || []).map(function (id) { return M.ACH.filter(function (x) { return x.id === id; })[0]; });
+    if (ac.length === 1) p.push("🏆 「" + esc(ac[0].name) + "」 🔹+" + ac[0].shards);
+    else if (ac.length) p.push("🏆 업적 " + ac.length + "개 🔹+" + ac.reduce(function (t, x) { return t + x.shards; }, 0));
+    if (!p.length) return "";
+    return '<div class="rg-replay" id="rg-replay">' + p.join(" · ") + " <em>(보유 " + M.shardsOf(m) + ")</em></div>";
   }
   // 갈림길 두 버튼 (결과·출전 고르기 공용)
   function perkPick(id, t, where) {
@@ -527,17 +563,25 @@
     var gm = loadMeta(), gown = gm.gear ? gm.gear.own.length : 0;
     var gb = btn("🎒 장비", gown ? "가진 장비 " + gown + "/" + M.GEAR_LIST.length + " · 자동 장착" : "강적·보스를 이기면 장비가 나온다", "stage gear", function () { showGear("title"); }, "btn-gear");
     list.appendChild(gb);
-    var d = loadDiff();
+    var ao = M.ascOpen(gm), dk = M.dailyOf(M.dayKey()), dd = gm.daily && gm.daily.key === dk.key ? gm.daily : null;
+    var cb = btn("🏆 도전", (ao ? "승천 " + ao + "까지 열림 · " : "") + "오늘의 런 " + (dd && dd.best ? (dd.best.win ? "✓ 승리" : dd.best.floor + "층") : "S" + dk.stage) + " · 조각 " + M.shardsOf(gm), "stage chal" + (dd && dd.done ? "" : " new"), function () { showChal(); }, "btn-chal");
+    list.appendChild(cb);
+    var d = loadDiff(), ta = $("#logo-title");
+    if (ta) { ta.hidden = !gm.title || !M.TITLES[gm.title]; ta.textContent = gm.title && M.TITLES[gm.title] ? "「" + M.TITLES[gm.title] + "」" : ""; }
     $("#btn-diff-normal").setAttribute("aria-pressed", d === "normal" ? "true" : "false");
     $("#btn-diff-hard").setAttribute("aria-pressed", d === "hard" ? "true" : "false");
-    $("#diff-hard-sub").textContent = "적 HP×" + R.DIFF.hard.hp + " 공격×" + R.DIFF.hard.atk;
+    var la = loadAsc(gm);
+    $("#diff-hard-sub").textContent = la ? "승천 " + la + " · " + R.ASC[la].name : "적 HP×" + R.DIFF.hard.hp + " 공격×" + R.DIFF.hard.atk;
   }
   // ---------- 출전 고르기 ----------
   var pick = null;
-  function startStage(n) {
-    var m = loadMeta();
-    if (m.unlocked.length <= 3) return newRun(n, m.unlocked.slice());
-    pick = { stage: n, ids: M.defaultParty(m), look: null };
+  function startStage(n, daily) {
+    var m = loadMeta(), p0 = { stage: n, daily: daily || null }, ban = R.ascBan(pickAsc(p0));
+    if (m.unlocked.length <= 3 && !ban.length) return newRun(n, m.unlocked.slice(), daily ? { daily: daily } : null);
+    var ids = M.defaultParty(m).filter(function (id) { return ban.indexOf(id) < 0; });
+    // 금지 동료 자리는 레벨 높은 동료로 바로 채운다 (고르기 한 번 덜)
+    m.unlocked.slice().sort(function (x, y) { return M.level(m, y) - M.level(m, x); }).forEach(function (id) { if (ids.length < 3 && ban.indexOf(id) < 0 && ids.indexOf(id) < 0) ids.push(id); });
+    pick = { stage: n, daily: daily || null, ids: ids, look: null };
     showParty();
   }
   // 의뢰 출발: 필수 동료를 먼저 세우고 나머지는 늘 쓰던 셋에서 채운다
@@ -555,7 +599,8 @@
   function showParty() {
     leaveScene();
     var m = loadMeta(), qd = pick.quest ? Q.QUESTS[pick.quest] : null, st = qd || R.STAGES[pick.stage];
-    $("#party-stage").textContent = (qd ? "📜 의뢰 · " + st.name : pick.stage + " · " + st.name) + (loadDiff() === "hard" ? " · 하드" : "");
+    var pa = pickAsc(pick), ban = R.ascBan(pa);
+    $("#party-stage").textContent = (qd ? "📜 의뢰 · " + st.name : pick.stage + " · " + st.name) + (pick.daily ? " · 📅 오늘의 런" : loadDiff() === "hard" ? " · 하드" + (pa ? " · 승천 " + pa : "") : "");
     $("#party-sub").textContent = qd ? "필수 " + qd.need.map(function (w) { return C.CAST[w].name; }).join("·") + " · " + pick.ids.length + "/3"
       : "출전 셋 · " + pick.ids.length + "/3 · 해금 " + m.unlocked.length + "명";
     var pri = recInfo(qd ? pick.quest : "s" + pick.stage, pick.ids, m), prEl = $("#party-rec");
@@ -574,7 +619,9 @@
         '<img class="' + (cd.pixel ? "px" : "") + '" src="' + cd.img + '" alt="" /><b>' + esc(cd.name) + "</b><small>" + esc(C.ORIGINS[cd.origin].name) + "</small>" +
         '<span class="lv' + (M.pending(m, id).length ? " new" : "") + '">Lv' + M.level(m, id) + (M.pending(m, id).length ? "!" : "") + "</span>";
       if (qd && qd.need.indexOf(id) >= 0) b.className += " must";
+      if (ban.indexOf(id) >= 0) { b.className += " ban"; b.insertAdjacentHTML("beforeend", '<span class="ban-t">승천 ' + pa + " 휴식</span>"); }
       b.addEventListener("click", function () {
+        if (ban.indexOf(id) >= 0) { pick.look = id; return showParty(); }   // 승천 규칙: 출전 불가
         var k = pick.ids.indexOf(id);
         if (k >= 0 && qd && qd.need.indexOf(id) >= 0) { pick.look = id; return showParty(); }   // 의뢰 필수 동료는 못 뺀다
         if (k >= 0) pick.ids.splice(k, 1);
@@ -610,9 +657,9 @@
     } else sh = '<div class="ps-row ps-none">' + (pick.ids.length === 3 ? "조합 없음 — 데려온 동료를 섞으면 조합이 켜진다" : "셋을 고르면 켜질 조합이 보인다") + "</div>";
     $("#party-syn").innerHTML = sh;
     bindPerk($("#party-info"), showParty);
-    var go = $("#btn-party-go"), ok3 = pick.ids.length === 3 && (!qd || Q.partyOk(pick.quest, pick.ids));
+    var go = $("#btn-party-go"), ok3 = pick.ids.length === 3 && (!qd || Q.partyOk(pick.quest, pick.ids)) && !pick.ids.some(function (id) { return ban.indexOf(id) >= 0; });
     go.disabled = !ok3;
-    go.innerHTML = ok3 ? (qd ? "이 셋으로 의뢰 출발" : "이 셋으로 출발") : "셋을 고르세요 (" + pick.ids.length + "/3)";
+    go.innerHTML = ok3 ? (qd ? "이 셋으로 의뢰 출발" : pick.daily ? "이 셋으로 오늘의 런" : "이 셋으로 출발") : "셋을 고르세요 (" + pick.ids.length + "/3)";
     A.show("scr-party");
   }
   function partyGo() {
@@ -620,8 +667,9 @@
     var m = loadMeta();
     if (!M.validParty(m, pick.ids)) return;
     if (pick.quest) { if (!Q.partyOk(pick.quest, pick.ids)) return; return newRun(pick.quest, pick.ids.slice()); }
+    if (R.ascBan(pickAsc(pick)).some(function (id) { return pick.ids.indexOf(id) >= 0; })) return;
     m.party = pick.ids.slice(); saveMeta(m);
-    newRun(pick.stage, pick.ids.slice());
+    newRun(pick.stage, pick.ids.slice(), pick.daily ? { daily: pick.daily } : null);
   }
 
   // 회복 유물 (docs/GROWTH.md): 첫 영입(해금 넷) 뒤부터 보물·강적·카드 보상에 셋째 칸으로
@@ -633,9 +681,13 @@
     saveMeta(m);
     return d;
   }
-  function newRun(stageNo, party) {
+  function newRun(stageNo, party, opt) {
     // 목록에서 새로 시작 = 타이틀에서 고른 난이도. 다시 하기(번호 없음) = 그 런의 난이도·시작 셋
     var diff = typeof stageNo === "number" || typeof stageNo === "string" ? loadDiff() : R.diffOf(run);
+    // 오늘의 런: 다시 하기 = 같은 날이면 같은 판 (보통 · 그날 시드 · 그날 스테이지)
+    var daily = opt && opt.daily ? opt.daily : stageNo == null && run && run.daily && run.daily === M.dayKey() ? run.daily : null;
+    if (daily) { var dy = M.dailyOf(daily); stageNo = dy.stage; diff = "normal"; }
+    var asc = !daily && diff === "hard" ? (typeof stageNo === "number" ? loadAsc() : run ? run.asc | 0 : 0) : 0;
     if (!party) party = run && run.start ? run.start.slice() : null;
     A.abort();
     // 동료 의뢰 던전 (다시 하기 = 같은 의뢰)
@@ -652,10 +704,12 @@
     if (typeof stageNo !== "number") stageNo = run && run.stage ? run.stage : loadStages().last || 1;
     if (!R.STAGES[stageNo] || !R.STAGES[stageNo].open) stageNo = 1;
     var rec = loadStages(); rec.last = stageNo; saveStages(rec);
-    var seed = A.hash.seed != null ? Number(A.hash.seed) : undefined;
+    var seed = daily ? M.dailyOf(daily).seed : A.hash.seed != null ? Number(A.hash.seed) : undefined;
     var mt = loadMeta(), sr = loadStages();
     gearAuto(mt, party || M.defaultParty(mt), diff);
-    var extra = { relics: M.relicsOf(mt).concat(Q.relics(loadQuest()), healRelics(mt)), variant: !!((sr.clears && sr.clears[stageNo]) || (sr.hard && sr.hard[stageNo])), mirror: mt.unlocked.length > 3 };
+    var extra = { relics: M.relicsOf(mt).concat(Q.relics(loadQuest()), healRelics(mt)), variant: !daily && !!((sr.clears && sr.clears[stageNo]) || (sr.hard && sr.hard[stageNo])), mirror: mt.unlocked.length > 3 };
+    if (asc) extra.asc = asc;
+    if (daily) extra.daily = daily;
     run = R.newRun(seed, stageNo, diff, party, M.growthMap(mt), extra);
     save();
     showMap();
@@ -730,7 +784,7 @@
   function gearMsg(g) { return g ? " 🎒 " + M.rarity(g) + " 장비 「" + M.GEAR[g].name + "」 " + M.stars(g) + " — 자동 장착 · 다음 런부터." : ""; }
   var gearView = null;   // { from, party, sel, diff }
   function gearStat(m, id, gid) {
-    var st = M.stats(m, id), fx = gid ? M.GEAR[gid].fx : {};
+    var st = M.stats(m, id), fx = gid ? M.fxOf(m, gid) : {};
     return { hp: fx.hp ? Math.round(st.hp * (1 + fx.hp)) : st.hp, atk: fx.atk ? Math.round(st.atk * (1 + fx.atk) * 10) / 10 : st.atk };
   }
   function showGear(from) {
@@ -762,12 +816,15 @@
       df.hidden = false;
     } else df.hidden = true;
     var gl = $("#gear-list"); gl.innerHTML = "";
+    $("#btn-gear-craft").setAttribute("aria-pressed", gv.mode === "craft" ? "true" : "false");
+    $("#btn-gear-craft").textContent = gv.mode === "craft" ? "🎒 끼우기로" : "🔨 제작·강화 🔹" + M.shardsOf(m);
+    if (gv.mode === "craft") { gearCraftList(m, gl); return A.show("scr-gear"); }
     if (!gs.own.length) gl.innerHTML = '<div class="gear-empty">아직 장비가 없다.<br>강적(★1–2)·보스(★2–3)를 이기거나 의뢰를 처음 끝내면(★3) 하나씩 나온다.<br>얻으면 자동으로 낀다.</div>';
     var sorted = gs.own.slice().sort(function (x, y) { return M.gearScore(y, gv.sel, gv.party, { diff: loadDiff() }) - M.gearScore(x, gv.sel, gv.party, { diff: loadDiff() }); });
     sorted.forEach(function (gid) {
       var G = M.GEAR[gid], w = M.wearer(m, gid), on = w === gv.sel, b = document.createElement("button");
       b.type = "button"; b.id = "gi-" + gid; b.className = "gitem t" + G.tier + (G.heal ? " heal" : "") + (on ? " on" : "");
-      b.innerHTML = '<b><span class="st">' + M.stars(gid) + "</span>" + esc(G.name) + "<em>" + M.rarity(gid) + (w ? " · " : "") + "</em><em>" + (w ? esc(C.CAST[w].name) + " 착용" + (on ? " · 누르면 뺀다" : "") : "") + "</em></b><small>" + esc(G.text) + "</small>";
+      b.innerHTML = '<b><span class="st">' + M.stars(gid) + "</span>" + esc(G.name) + (M.upOf(m, gid) ? " +" + M.upOf(m, gid) : "") + "<em>" + M.rarity(gid) + (w ? " · " : "") + "</em><em>" + (w ? esc(C.CAST[w].name) + " 착용" + (on ? " · 누르면 뺀다" : "") : "") + "</em></b><small>" + esc(G.text) + "</small>";
       b.addEventListener("click", function () {
         var mm = loadMeta();
         if (M.equip(mm, gv.sel, on ? null : gid)) { saveMeta(mm); if (SND) SND.sfx("click"); }
@@ -776,6 +833,72 @@
       gl.appendChild(b);
     });
     A.show("scr-gear");
+  }
+  // 제작·강화 (docs/GEAR.md 「조각」): 가진 장비 = +1~+3 강화, 안 가진 ★1–3 = 제작. 유니크는 제작 불가 (강화는 된다)
+  function gearCraftList(m, gl) {
+    var own = m.gear.own, sh = M.shardsOf(m);
+    $("#gear-sub").textContent = "🔹 조각 " + sh + " · 져도 쌓인다 · 강화 +1 = 좋은 효과 ×1.2";
+    var list = M.GEAR_LIST.filter(function (g) { return own.indexOf(g) >= 0 || M.GEAR[g].tier < 4; });
+    list.sort(function (x, y) { var ox = own.indexOf(x) >= 0, oy = own.indexOf(y) >= 0; return (oy - ox) || (M.GEAR[y].tier - M.GEAR[x].tier); });
+    list.forEach(function (gid) {
+      var G = M.GEAR[gid], has = own.indexOf(gid) >= 0, u = M.upOf(m, gid), b = document.createElement("button"), cost, ok, act;
+      if (has) { cost = u < M.UP_MAX ? M.upCost(gid, u + 1) : 0; ok = M.canUpgrade(m, gid); act = u >= M.UP_MAX ? "최대 강화" : "강화 +" + (u + 1) + " · 🔹" + cost; }
+      else { cost = M.CRAFT[G.tier]; ok = M.canCraft(m, gid); act = "제작 · 🔹" + cost; }
+      b.type = "button"; b.id = "gc-" + gid; b.className = "gitem t" + G.tier + (ok ? " can" : " cant");
+      b.innerHTML = '<b><span class="st">' + M.stars(gid) + "</span>" + esc(G.name) + (u ? " +" + u : "") + "<em>" + (has ? "가짐" : "안 가짐") + "</em></b><small>" + esc(G.text) + (u ? " (강화 ×" + (1 + M.UP_STEP * u).toFixed(1) + ")" : "") + '<br><span class="gc">' + act + (ok || u >= M.UP_MAX ? "" : " (부족)") + "</span></small>";
+      b.addEventListener("click", function () {
+        var mm = loadMeta(), done = has ? M.upgrade(mm, gid) : M.craft(mm, gid);
+        if (!done) return;
+        M.checkAch(mm, { stages: loadStages(), quests: Q.progress(loadQuest()) });
+        if (!has) M.autoEquip(mm, gearView.party, { diff: loadDiff() });
+        saveMeta(mm); if (SND) SND.sfx("click"); showGear();
+      });
+      gl.appendChild(b);
+    });
+  }
+  // ---------- 🏆 도전: 승천 · 오늘의 런 · 업적 ----------
+  var chalTab = "asc";
+  function showChal(tab) {
+    leaveScene();
+    if (tab) chalTab = tab;
+    var m = loadMeta(), box = $("#chal-list"), h = "", ao = M.ascOpen(m), cur = loadDiff() === "hard" ? loadAsc(m) : -1;
+    ["asc", "daily", "ach"].forEach(function (t) { $("#ch-tab-" + t).setAttribute("aria-pressed", chalTab === t ? "true" : "false"); });
+    $("#chal-sub").textContent = "🔹 조각 " + M.shardsOf(m) + (m.title && M.TITLES[m.title] ? " · 「" + M.TITLES[m.title] + "」" : "");
+    if (chalTab === "asc") {
+      h += '<div class="cx-h">하드를 아무 스테이지나 깨면 승천 1 이 열린다. 깨면 다음 단계. 처음 깨면 조각 5+3×단계 · 25% 로 유니크</div>';
+      for (var a = 0; a <= R.ASC_MAX; a++) {
+        var open = a === 0 || a <= ao, done = a > 0 && m.asc && m.asc.cleared && m.asc.cleared[a];
+        h += '<button type="button" class="ch-row' + (cur === a ? " sel" : "") + (open ? "" : " lock") + (done ? " done" : "") + '" id="asc-' + a + '" data-a="' + a + '"' + (open ? "" : " disabled") + ">" +
+          "<b>" + (a === 0 ? "하드 (승천 없음)" : "승천 " + a + " · " + esc(R.ASC[a].name)) + "<em>" + (cur === a ? "고름" : open ? "" : "🔒") + "</em></b>" +
+          "<small>" + (a === 0 ? "적 HP×" + R.DIFF.hard.hp + " 공격×" + R.DIFF.hard.atk : esc(R.ascText(a))) + "</small></button>";
+      }
+      h += '<div class="cx-h">초반 스테이지(1–2)부터 오르길 권한다. 규칙은 그 단계 것 하나만 — 단계마다 맞는 셋이 다르다</div>';
+    } else if (chalTab === "daily") {
+      var dk = M.dailyOf(M.dayKey()), dd = m.daily && m.daily.key === dk.key ? m.daily : null, st = R.STAGES[dk.stage];
+      h += '<div class="ch-big"><small>' + dk.key + " · 모두 같은 판 (보통 · 같은 시드)</small><div class=\"n\">스테이지 " + dk.stage + " · " + esc(st.name) + "</div>" +
+        "<small>오늘 최고: " + (dd && dd.best ? (dd.best.win ? "승리 · " + dd.best.rounds + "라운드" : dd.best.floor + "층") + " · 시도 " + dd.tries : "아직 없음") + "</small>" +
+        '<button type="button" class="btn primary big" id="btn-daily-go">📅 오늘의 런 출발</button>' +
+        "<small>하루 처음 끝내면 🔹3 · 처음 이기면 🔹+5 · 이긴 날 " + ((m.daily && m.daily.wins) || []).length + "일</small></div>";
+    } else {
+      var got = M.ACH.filter(function (x) { return m.ach && m.ach[x.id]; }).length;
+      h += '<div class="cx-h">업적 ' + got + "/" + M.ACH.length + " · 칭호를 누르면 타이틀에 보인다</div>";
+      var tl = M.titlesOf(m);
+      if (tl.length) h += '<div class="ch-titles">' + ['<button type="button" class="btn" data-title="" aria-pressed="' + (!m.title) + '">칭호 없음</button>'].concat(tl.map(function (t) { return '<button type="button" class="btn" id="title-' + t + '" data-title="' + t + '" aria-pressed="' + (m.title === t) + '">' + esc(M.TITLES[t]) + "</button>"; })).join("") + "</div>";
+      M.ACH.forEach(function (x) {
+        var g = m.ach && m.ach[x.id];
+        h += '<div class="ch-row' + (g ? " got done" : "") + '" id="ach-' + x.id + '"><b>' + esc(x.name) + "<em>🔹" + x.shards + (x.title ? " · 칭호 「" + esc(M.TITLES[x.title]) + "」" : "") + "</em></b><small>" + esc(x.text) + "</small></div>";
+      });
+    }
+    box.innerHTML = h; box.scrollTop = 0;
+    Array.prototype.forEach.call(box.querySelectorAll("button[data-a]"), function (b) {
+      b.addEventListener("click", function () { saveDiff("hard"); saveAsc(Number(b.dataset.a)); if (SND) SND.sfx("click"); updateTitle(); showChal(); });
+    });
+    Array.prototype.forEach.call(box.querySelectorAll("button[data-title]"), function (b) {
+      b.addEventListener("click", function () { var mm = loadMeta(); if (b.dataset.title) mm.title = b.dataset.title; else delete mm.title; saveMeta(mm); showChal(); });
+    });
+    var dg = $("#btn-daily-go");
+    if (dg) dg.addEventListener("click", function () { var dk = M.dailyOf(M.dayKey()); startStage(dk.stage, dk.key); });
+    A.show("scr-chal");
   }
   // ---------- 도감 ----------
   var codexTab = "gear";
@@ -836,6 +959,10 @@
     $("#btn-party-gear").addEventListener("click", function () { showGear("party"); });
     $("#btn-gear-auto").addEventListener("click", gearAutoBtn);
     $("#btn-gear-codex").addEventListener("click", function () { showCodex("gear"); });
+    $("#btn-gear-craft").addEventListener("click", function () { gearView.mode = gearView.mode === "craft" ? null : "craft"; gearView.diff = null; showGear(); });
+    ["asc", "daily", "ach"].forEach(function (t) { $("#ch-tab-" + t).addEventListener("click", function () { showChal(t); }); });
+    $("#btn-chal-back").addEventListener("click", function () { updateTitle(); A.show("scr-title"); });
+    $("#btn-next").addEventListener("click", function () { var n = Number($("#btn-next").dataset.stage); if (n) startStage(n); });
     $("#cx-tab-gear").addEventListener("click", function () { showCodex("gear"); });
     $("#cx-tab-relic").addEventListener("click", function () { showCodex("relic"); });
     $("#btn-codex-back").addEventListener("click", function () { showGear(); });
@@ -865,7 +992,7 @@
     updateTitle();
     window.__fcbRun = {
       get run() { return run; }, R: R, newRun: newRun, cont: cont, showMap: showMap, showNode: showNode, enterNode: enterNode,
-      result: result, save: save, loadSave: loadSave, battle: false, loadStages: loadStages, updateTitle: updateTitle, loadDiff: loadDiff, loadMeta: loadMeta, saveMeta: saveMeta, startStage: startStage, M: M,
+      result: result, save: save, loadSave: loadSave, battle: false, loadStages: loadStages, updateTitle: updateTitle, loadDiff: loadDiff, loadMeta: loadMeta, saveMeta: saveMeta, startStage: startStage, M: M, showChal: showChal, loadAsc: loadAsc, saveAsc: saveAsc,
       Q: Q, loadQuest: loadQuest, saveQuest: saveQuest, showQuests: showQuests, showQuest: showQuest, startQuest: startQuest,
       showGear: showGear, gearDrop: gearDrop, showCodex: showCodex,
     };

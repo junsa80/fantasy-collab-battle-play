@@ -31,6 +31,14 @@
       if (o.gear.eq) Object.keys(o.gear.eq).forEach(function (id) { var g = o.gear.eq[id]; if (C.CAST[id] && own.indexOf(g) >= 0 && !used[g]) { m.gear.eq[id] = g; used[g] = 1; } });
       if (o.gear.lock) Object.keys(o.gear.lock).forEach(function (id) { if (C.CAST[id] && o.gear.lock[id]) m.gear.lock[id] = 1; });
     }
+    if (o.gear && o.gear.up && typeof o.gear.up === "object") { m.gear.up = {}; Object.keys(o.gear.up).forEach(function (g) { var n = o.gear.up[g] | 0; if (GEAR[g] && n > 0) m.gear.up[g] = Math.min(UP_MAX, n); }); }
+    // 반복 동기 (docs/GROWTH.md 「반복」): 조각 · 업적 · 승천 · 칭호 · 오늘의 런 · 기록 — 있을 때만 키
+    if (o.shards > 0) m.shards = Math.floor(o.shards);
+    if (o.ach && typeof o.ach === "object") m.ach = o.ach;
+    if (o.asc && typeof o.asc === "object") m.asc = { open: Math.max(0, Math.min(10, o.asc.open | 0)), best: Math.max(0, Math.min(10, o.asc.best | 0)), cleared: o.asc.cleared && typeof o.asc.cleared === "object" ? o.asc.cleared : {} };
+    if (typeof o.title === "string") m.title = o.title;
+    if (o.daily && typeof o.daily === "object") m.daily = o.daily;
+    if (o.rec && typeof o.rec === "object") m.rec = o.rec;
     if (validParty(m, o.party)) m.party = o.party.slice();
     if (o.migrated) m.migrated = o.migrated;
     return m;
@@ -144,21 +152,133 @@
       out = out || {};
       out[id] = { lv: st.lv, hp: st.hp, atk: st.atk, perks: pk };
       if (gid) {
-        var fx = GEAR[gid].fx, gx = {};
+        var fx = fxOf(m, gid), gx = {};
         if (fx.hp) out[id].hp = Math.round(st.hp * (1 + fx.hp));
         if (fx.atk) out[id].atk = Math.round(st.atk * (1 + fx.atk) * 10) / 10;
         Object.keys(fx).forEach(function (k) { if (k !== "hp" && k !== "atk") gx[k] = fx[k]; });
         if (Object.keys(gx).length) out[id].gx = gx;
         out[id].gear = gid;
+        if (fx.hp || fx.atk) out[id].gfx = { hp: fx.hp || 0, atk: fx.atk || 0 };   // 승천 「녹슨 장비」가 되돌릴 때 쓴다
       }
     });
     return out;
   }
 
+  // ---------- ⑤ 반복 동기 (docs/GROWTH.md 「반복」) ----------
+  // 장비 조각: 지면 (도달 층 + 1), 이기면 4 (하드 ×2, 승천 +단계). 조각으로 안 가진 장비(★1–3) 제작 · 가진 장비 강화(+1~+3)
+  var UP_MAX = 3, UP_STEP = 0.2;
+  var CRAFT = { 1: 6, 2: 15, 3: 30 };
+  function upOf(m, gid) { return (m.gear && m.gear.up && m.gear.up[gid]) | 0; }
+  // 강화한 효과: 좋은 쪽(+) 만 × (1 + 0.2n), 대가(−)는 그대로
+  function fxOf(m, gid) {
+    var fx = GEAR[gid].fx, u = upOf(m, gid); if (!u) return fx;
+    var o = {}; Object.keys(fx).forEach(function (k) { var v = fx[k]; o[k] = k === "low" ? 1 + (v - 1) * (1 + UP_STEP * u) : v > 0 ? (v >= 1 ? Math.round(v * (1 + UP_STEP * u)) : Math.round(v * (1 + UP_STEP * u) * 1000) / 1000) : v; });
+    return o;
+  }
+  function upCost(gid, n) { var t = GEAR[gid].tier; return (t === 4 ? 20 : t * 5) * n; }   // n = 다음 단계
+  function shardsOf(m) { return m.shards | 0; }
+  function addShards(m, n) { n = Math.round(n); if (n > 0) m.shards = shardsOf(m) + n; return n; }
+  function canCraft(m, gid) { var G = GEAR[gid]; return !!G && G.tier < 4 && gearSave(m).own.indexOf(gid) < 0 && shardsOf(m) >= CRAFT[G.tier]; }
+  function craft(m, gid) { if (!canCraft(m, gid)) return false; m.shards -= CRAFT[GEAR[gid].tier]; gearSave(m).own.push(gid); return true; }
+  function canUpgrade(m, gid) { var u = upOf(m, gid); return gearSave(m).own.indexOf(gid) >= 0 && u < UP_MAX && shardsOf(m) >= upCost(gid, u + 1); }
+  function upgrade(m, gid) { if (!canUpgrade(m, gid)) return false; var u = upOf(m, gid); m.shards -= upCost(gid, u + 1); gearSave(m).up = gearSave(m).up || {}; m.gear.up[gid] = u + 1; return true; }
+  function runShards(run) {
+    var win = run.over === "win", nf = run.map ? run.map.length : 6;
+    var n = win ? 4 : 1 + Math.max(0, Math.min(nf - 1, run.floor | 0));
+    if (run.diff === "hard") n *= 2;
+    if (run.asc > 0) n += run.asc;
+    return n;
+  }
+  // 승천: 하드에서 아무 스테이지나 깨면 1 이 열리고, 승천 k 를 깨면 k+1. 처음 깰 때 조각 5+3k · 칭호(1·5·10) · 25% 로 안 가진 유니크 하나
+  function ascSave(m) { if (!m.asc) m.asc = { open: 0, best: 0, cleared: {} }; m.asc.cleared = m.asc.cleared || {}; return m.asc; }
+  function ascOpen(m) { return (m.asc && m.asc.open) | 0; }
+  function ascWin(m, a, seed) {
+    var as = ascSave(m), out = { first: false, opened: 0, shards: 0, unique: null };
+    if (a <= 0) { if (as.open < 1) { as.open = 1; out.opened = 1; } return out; }
+    if (a + 1 > as.open && a < 10) { as.open = a + 1; out.opened = a + 1; }
+    if (!as.cleared[a]) {
+      as.cleared[a] = 1; out.first = true; as.best = Math.max(as.best, a);
+      out.shards = addShards(m, 5 + 3 * a);
+      if (rnd((seed >>> 0) + a * 977) < 0.25) {
+        var left = GEAR_LIST.filter(function (g) { return GEAR[g].tier === 4 && gearSave(m).own.indexOf(g) < 0; });
+        if (left.length) { out.unique = left[Math.floor(rnd((seed >>> 0) + 31) * left.length)]; m.gear.own.push(out.unique); }
+      }
+    }
+    return out;
+  }
+  // 칭호 (보이기만): 업적 · 승천에서 열린다
+  var TITLES = { pilgrim: "균열 순례자", sealer: "다섯 문의 봉인자", asc5: "승천 5의 문지기", asc10: "균열의 끝을 본 자", daily: "오늘의 정복자", collector: "장비 수집가", veteran: "다시 일어선 자", maxed: "만렙 동료의 벗" };
+  // 업적: 조건 · 보상 조각 · (칭호)
+  var ACH = [
+    { id: "first_win", name: "첫 승리", text: "아무 스테이지나 한 번 이긴다", shards: 5 },
+    { id: "all_stages", name: "다섯 문", text: "스테이지 1~5 를 모두 깬다", shards: 20, title: "sealer" },
+    { id: "hard_win", name: "하드 돌파", text: "하드로 한 번 이긴다", shards: 10 },
+    { id: "asc1", name: "첫 승천", text: "승천 1 을 깬다", shards: 10, title: "pilgrim" },
+    { id: "asc5", name: "승천 5", text: "승천 5 를 깬다", shards: 20, title: "asc5" },
+    { id: "asc10", name: "균열의 끝", text: "승천 10 을 깬다", shards: 40, title: "asc10" },
+    { id: "no_sera", name: "치유사 없이", text: "세라 없이 이긴다", shards: 10 },
+    { id: "quests", name: "의뢰 해결사", text: "동료 의뢰 넷을 모두 끝낸다", shards: 15 },
+    { id: "roster", name: "열두 명", text: "동료 열둘을 모두 해금한다", shards: 15 },
+    { id: "lv8", name: "최대 레벨", text: "동료 하나를 Lv8 로 키운다", shards: 10, title: "maxed" },
+    { id: "gear10", name: "장비 열 개", text: "장비 열 개를 가진다", shards: 10, title: "collector" },
+    { id: "up3", name: "+3 강화", text: "장비 하나를 +3 까지 강화한다", shards: 10 },
+    { id: "daily1", name: "오늘의 승리", text: "오늘의 런을 이긴다", shards: 5 },
+    { id: "daily3", name: "사흘의 승리", text: "서로 다른 사흘에 오늘의 런을 이긴다", shards: 15, title: "daily" },
+    { id: "loss10", name: "다시 일어서기", text: "열 번 진다 (지는 것도 성장)", shards: 5, title: "veteran" },
+  ];
+  // ctx: { stages: {clears, hard}, quests: n완료 } — 지금 저장으로 새로 달성한 업적을 찍고 보상을 준다
+  function checkAch(m, ctx) {
+    m.ach = m.ach || {}; var got = [], st = ctx && ctx.stages || {}, cl = st.clears || {}, hd = st.hard || {}, r = m.rec || {};
+    var cleared = function (n) { return (cl[n] | 0) > 0 || (hd[n] | 0) > 0; };
+    var cond = {
+      first_win: (r.wins | 0) > 0 || [1, 2, 3, 4, 5].some(cleared),
+      all_stages: [1, 2, 3, 4, 5].every(cleared),
+      hard_win: Object.keys(hd).some(function (n) { return hd[n] > 0; }) || (ascOpen(m) > 0),
+      asc1: !!(m.asc && m.asc.cleared && m.asc.cleared[1]), asc5: !!(m.asc && m.asc.cleared && m.asc.cleared[5]), asc10: !!(m.asc && m.asc.cleared && m.asc.cleared[10]),
+      no_sera: (r.noSera | 0) > 0,
+      quests: (ctx && ctx.quests | 0) >= 4,
+      roster: m.unlocked.length >= ORDER.length,
+      lv8: m.unlocked.some(function (id) { return level(m, id) >= MAX_LV; }),
+      gear10: gearSave(m).own.length >= 10,
+      up3: Object.keys(gearSave(m).up || {}).some(function (g) { return m.gear.up[g] >= UP_MAX; }),
+      daily1: (m.daily && (m.daily.wins || []).length) > 0,
+      daily3: (m.daily && (m.daily.wins || []).length) >= 3,
+      loss10: (r.losses | 0) >= 10,
+    };
+    ACH.forEach(function (a) { if (!m.ach[a.id] && cond[a.id]) { m.ach[a.id] = 1; addShards(m, a.shards); got.push(a.id); } });
+    return got;
+  }
+  function titlesOf(m) { var t = []; ACH.forEach(function (a) { if (a.title && m.ach && m.ach[a.id]) t.push(a.title); }); return t; }
+  // 런 기록 (업적용): 승리 · 패배 · 세라 없이 승리
+  function recordRun(m, run) {
+    m.rec = m.rec || {};
+    if (run.over === "win") { m.rec.wins = (m.rec.wins | 0) + 1; if ((run.roster || run.active || []).indexOf("sera") < 0) m.rec.noSera = (m.rec.noSera | 0) + 1; }
+    else m.rec.losses = (m.rec.losses | 0) + 1;
+  }
+  // 오늘의 런: 날짜(현지) → 같은 시드 · 같은 스테이지 (보통). 기록 = 이김 > 도달 층 > 적은 라운드. 하루 처음 끝내면 조각 3, 처음 이기면 +5
+  function dayKey(d) { d = d || new Date(); return d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2) + "-" + ("0" + d.getDate()).slice(-2); }
+  function dailyOf(key) {
+    var h = 2166136261; for (var i = 0; i < key.length; i++) { h ^= key.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
+    var p = key.split("-").map(Number), day = Math.floor(Date.UTC(p[0], p[1] - 1, p[2]) / 86400000);
+    return { key: key, seed: (h % 2000000000) + 1, stage: (day % 5) + 1 };
+  }
+  function dailyScore(r) { return (r.win ? 100000 : 0) + r.floor * 1000 - Math.min(999, r.rounds | 0); }
+  function dailyResult(m, run) {
+    var key = run.daily, d = m.daily && m.daily.key === key ? m.daily : { key: key, best: null, tries: 0, done: 0, won: 0, wins: (m.daily && m.daily.wins) || [] };
+    var win = run.over === "win", nf = run.map ? run.map.length : 6, r = { win: win, floor: win ? nf : Math.min(nf, (run.floor | 0) + 1), rounds: run.stats ? run.stats.rounds : 0 };
+    var out = { best: false, shards: 0, rec: r };
+    d.tries = (d.tries | 0) + 1;
+    if (!d.best || dailyScore(r) > dailyScore(d.best)) { d.best = r; out.best = true; }
+    if (!d.done) { d.done = 1; out.shards += addShards(m, 3); }
+    if (win && !d.won) { d.won = 1; out.shards += addShards(m, 5); if (d.wins.indexOf(key) < 0) d.wins = d.wins.concat([key]).slice(-30); }
+    m.daily = d;
+    return out;
+  }
+
   // ---------- 권장 레벨 (docs/STAGES.md 「권장 레벨」) ----------
-  // [보통, 하드]. tools/reclevel-run.sh: 그때 쓸 수 있는 무난한 셋 중 끝까지 키우면 깨는 셋의 승률 중앙값이 50%를 넘는 가장 낮은 레벨
-  // (casual · 신중 경로 · 그 레벨쯤 가진 장비 자동 장착). 뒤 스테이지 ≥ 앞 · 하드 ≥ 보통으로 다듬음. 9 = 「8+」
-  var REC = { s1: [1, 3], s2: [3, 3], s3: [3, 3], s4: [3, 3], s5: [6, 6], q1: [1, 2], q2: [1, 2], q3: [1, 1], q4: [6, 6] };
+  // [보통, 하드]. tools/reclevel-run.sh (2026-10-25 곡선 뒤): 그때 쓸 수 있는 무난한 셋 중 기준 셋 다섯(Lv3·Lv8 곡선 없이 승률 1~5등)의
+  // 승률 중앙값이 50%를 넘는 가장 낮은 레벨 (casual · 신중 경로 · 그 레벨쯤 가진 장비 자동 장착). 뒤 스테이지 ≥ 앞 · 하드 ≥ 보통으로 다듬음. 9 = 「8+」
+  var REC = { s1: [1, 3], s2: [1, 3], s3: [3, 6], s4: [4, 7], s5: [6, 8], q1: [3, 3], q2: [3, 3], q3: [3, 3], q4: [6, 9] };
   function recLevel(key, diff) { var r = REC[key]; return r ? r[diff === "hard" ? 1 : 0] : null; }
   function recText(n) { return "권장 Lv " + (n > MAX_LV ? MAX_LV + "+" : n); }
   function avgLevel(m, ids) { if (!ids || !ids.length) return 1; return ids.reduce(function (a, id) { return a + level(m, id); }, 0) / ids.length; }
@@ -284,7 +404,9 @@
   // 한 장비의 값: 그 동료 · 그 셋(세라 유무) · 그 난이도에서 승률을 얼마나 올리는지. 등급은 안 본다
   function gearScore(gid, id, party, ctx) {
     var diff = ctx && ctx.diff === "hard" ? "hard" : "normal", c = party.indexOf("sera") >= 0 ? "s" : "n";
-    var i = GEAR_LIST.indexOf(gid); return i < 0 ? 0 : gvRow(diff, c, id)[i];
+    var i = GEAR_LIST.indexOf(gid); if (i < 0) return 0;
+    var v = gvRow(diff, c, id)[i], u = ctx && ctx.up ? ctx.up[gid] | 0 : 0;
+    return u && v > 0 ? Math.round(v * (1 + UP_STEP * u)) : v;   // 강화 +n = 좋은 효과 × (1 + 0.2n) → 값도 그만큼
   }
   // 장비 묶음 값 = 합 (로짓 더하기. 묶음 시뮬로 확인: docs/GEAR.md)
   function setValue(list, party, ctx) { return list.reduce(function (a, x) { return a + gearScore(x.g, x.id, party, ctx); }, 0); }
@@ -292,7 +414,7 @@
   // 자동 장착: 파티 셋에 가진 장비 중 「값」(GV · setValue)이 가장 큰 묶음을 통째로 찾는다 (빈 칸 포함, 겹침 없음).
   // 직접 고른(잠금) 칸은 두고 값에만 넣는다. 값이 MIN_VAL 미만인 장비는 안 낀다 → 장비 없는 것보다 나빠지지 않게. 쉬는 동료가 낀 것도 가져온다.
   function autoEquip(m, party, opts) {
-    var gs = gearSave(m), before = {}, ctx = { diff: opts && opts.diff };
+    var gs = gearSave(m), before = {}, ctx = { diff: opts && opts.diff, up: gs.up };
     party.forEach(function (id) { before[id] = gs.eq[id] || null; });
     if (opts && opts.reset) party.forEach(function (id) { delete gs.lock[id]; });
     var fixed = [], free = [], used = {};
@@ -472,6 +594,8 @@
     MAX_LV: MAX_LV, THRESH: THRESH, XP: XP, PER_LV: PER_LV, PERK: PERK, PICKS: PICKS, PERK_LV: PERK_LV,
     xpOf: xpOf, level: level, levelOfXp: levelOfXp, perkKeys: perkKeys, pending: pending, choosePerk: choosePerk, stats: stats, statsAt: statsAt, growthMap: growthMap, runXp: runXp, addXp: addXp, award: award, nextAt: nextAt,
     BOND_LV: BOND_LV, BOND_XP: BOND_XP, MIRROR_XP: MIRROR_XP, BONDS: BONDS, bondNext: bondNext, hearBond: hearBond, RELIC_LV: RELIC_LV, RELIC_OF: RELIC_OF, relicsOf: relicsOf,
+    UP_MAX: UP_MAX, UP_STEP: UP_STEP, CRAFT: CRAFT, upOf: upOf, fxOf: fxOf, upCost: upCost, shardsOf: shardsOf, addShards: addShards, canCraft: canCraft, craft: craft, canUpgrade: canUpgrade, upgrade: upgrade, runShards: runShards,
+    ascSave: ascSave, ascOpen: ascOpen, ascWin: ascWin, TITLES: TITLES, ACH: ACH, checkAch: checkAch, titlesOf: titlesOf, recordRun: recordRun, dayKey: dayKey, dailyOf: dailyOf, dailyScore: dailyScore, dailyResult: dailyResult,
     REC: REC, recLevel: recLevel, recText: recText, avgLevel: avgLevel, recState: recState,
     GEAR: GEAR, GEAR_LIST: GEAR_LIST, GV: GV, setValue: setValue, ROLE: ROLE, ROLE_NAME: ROLE_NAME, gearOf: gearOf, gearScore: gearScore, stars: stars, autoEquip: autoEquip, equip: equip, dropGear: dropGear, grantUnique: grantUnique, wearer: wearer, DROP: DROP, RARITY: RARITY, rarity: rarity, whereText: whereText, SRC_TEXT: SRC_TEXT };
   if (typeof module !== "undefined" && module.exports) module.exports = api;

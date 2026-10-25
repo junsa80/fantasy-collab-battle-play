@@ -98,12 +98,61 @@
     hard: { name: "하드", hp: 1.25, atk: 1.1 },
   };
   function diffOf(run) { return run && run.diff === "hard" ? "hard" : "normal"; }
-  // 적 배율 = 층 보정 × 난이도. 보통이면 층 보정 그대로 (곱하지 않음 → 보통 결과 그대로)
-  function enemyScale(run, tier) {
-    var sc = SCALE[tier] || SCALE.t1;
-    if (diffOf(run) !== "hard") return sc;
-    return { hp: sc.hp * DIFF.hard.hp, atk: sc.atk * DIFF.hard.atk };
+  // 스테이지 곡선 (docs/STAGES.md 「난이도 곡선」, 2026-10-25 사용자 요청 t341u 로 이슈 #1 보류 중 「스테이지별 적 배율·승천 배율」만 해제).
+  // 적 HP × m, 공격 × (1 + (m − 1) × ATK_SHARE). 스테이지 1 = 1 (시작 셋 기준선 그대로). 의뢰는 QUEST_MUL. 값은 tools/curve-fit.js · tools/reclevel-run.sh 로 맞춤
+  var STAGE_MUL = { 1: 1, 2: 1.1, 3: 1.27, 4: 1.32, 5: 1.37 };
+  var QUEST_MUL = { q1: 1.32, q2: 1.43, q3: 1.5, q4: 0.95 };
+  var ATK_SHARE = 0.6;
+  // 하드는 곡선을 절반만 (하드 배율 ×1.25/×1.1 은 그대로 두고, 그 위에 곡선을 다 얹으면 3–5 하드가 Lv8 최강 셋도 40% 아래)
+  var HARD_CURVE = 0.5;
+  // 승천 (하드 위): 단계마다 적 HP +2% · 공격 +2% 씩 쌓이고(기본), 그 단계만의 규칙 하나가 붙는다 (안 쌓임 → 단계마다 유리한 전략이 다르다).
+  // 깨면 다음 단계가 열린다 (docs/STAGES.md 「승천」, 시뮬 tools/ascend-run.sh)
+  var ASC_BASE = { hp: 0.02, atk: 0.02 };
+  var ASC = [
+    null,
+    { name: "첫 승천", text: "규칙 없음" },
+    { name: "날 선 강적", text: "강적 공격 +20%", elite: { atk: 0.2 } },
+    { name: "얕은 우물", text: "⛲ 휴식 회복 50% → 25%", rest: 0.25 },
+    { name: "치유 약화", text: "아군이 받는 회복 −15%", heal: 0.85 },
+    { name: "두꺼운 보스", text: "보스 HP +25%", boss: { hp: 0.25 } },
+    { name: "치유사 휴식", text: "세라 출전 불가 · 적 HP −10%", ban: ["sera"], hp: -0.1 },
+    { name: "녹슨 장비", text: "장비 효과 절반", gear: 0.5 },
+    { name: "짧은 숨", text: "적 HP −15% · 적 공격 +25%", hp: -0.15, atk: 0.25 },
+    { name: "쇠약", text: "아군 최대 HP −12%", maxHp: 0.88 },
+    { name: "균열의 끝", text: "보스 공격 +15% · 강적 HP +15% · 쓰러지면 HP 10%로 일어남", boss: { atk: 0.15 }, elite: { hp: 0.15 }, revive: 0.1 },
+  ];
+  var ASC_MAX = ASC.length - 1;
+  function ascOf(run) { return run && run.diff === "hard" && run.asc > 0 ? Math.min(ASC_MAX, run.asc | 0) : 0; }
+  function ascBan(a) { return a > 0 && ASC[a] && ASC[a].ban ? ASC[a].ban.slice() : []; }
+  function ascText(a) { return a > 0 && ASC[a] ? "적 HP +" + Math.round(a * ASC_BASE.hp * 100) + "% · 공격 +" + Math.round(a * ASC_BASE.atk * 100) + "% · " + ASC[a].text : ""; }
+  // 그 단계의 규칙 (기본 배율은 단계 수만큼 쌓이고, 규칙은 그 단계 것 하나)
+  function ascRules(run) {
+    var a = ascOf(run), L = ASC[a] || {};
+    return { hp: a * ASC_BASE.hp + (L.hp || 0), atk: a * ASC_BASE.atk + (L.atk || 0), ban: L.ban || [], eliteHp: (L.elite && L.elite.hp) || 0, eliteAtk: (L.elite && L.elite.atk) || 0, bossHp: (L.boss && L.boss.hp) || 0, bossAtk: (L.boss && L.boss.atk) || 0,
+      rest: L.rest != null ? L.rest : null, heal: L.heal != null ? L.heal : null, gear: L.gear != null ? L.gear : 1, keepGauge: L.keepGauge != null ? L.keepGauge : null, gaugeStart: L.gaugeStart != null ? L.gaugeStart : null, revive: L.revive != null ? L.revive : null, maxHp: L.maxHp || 1 };
   }
+  function stageMul(run) {
+    if (!run) return 1;
+    if (run.quest) return QUEST_MUL[run.quest] || 1;
+    return STAGE_MUL[run.stage] || 1;
+  }
+  // 적 배율 = 층 보정 × 스테이지 곡선 × 난이도 × 승천. 스테이지 1 보통이면 층 보정 그대로 (곱하지 않음 → 기준선 그대로)
+  function enemyScale(run, tier) {
+    var hard = diffOf(run) === "hard", sc = SCALE[tier] || SCALE.t1, m = stageMul(run), a = ascOf(run);
+    if (hard && m !== 1) m = 1 + (m - 1) * HARD_CURVE;
+    if (m === 1 && !hard) return sc;
+    var hp = sc.hp, atk = sc.atk;
+    if (m !== 1) { hp = hp * m; atk = atk * (1 + (m - 1) * ATK_SHARE); }
+    if (hard) { hp = hp * DIFF.hard.hp; atk = atk * DIFF.hard.atk; }
+    if (a) {
+      var o = ascRules(run);
+      hp = hp * (1 + o.hp + (tier === "elite" ? o.eliteHp : 0) + (tier === "boss" ? o.bossHp : 0));
+      atk = atk * (1 + o.atk + (tier === "elite" ? o.eliteAtk : 0) + (tier === "boss" ? o.bossAtk : 0));
+    }
+    return { hp: hp, atk: atk };
+  }
+  // 휴식 회복 비율 (승천 3 「얕은 우물」 이면 줄어든다)
+  function restHeal(run) { var o = ascOf(run) ? ascRules(run) : null; return o && o.rest != null ? o.rest : REST.heal; }
   var BATTLE_ROOMS = ["servants", "banquet", "armory", "store"];
 
   // 층 설계: 층마다 고를 수 있는 칸 종류 (seed 로 방·무리만 섞는다). 마지막은 보스 고정.
@@ -346,7 +395,7 @@
   };
 
   // 스테이지. open = 테스트(node tools/run-sim.js 100)를 통과해 타이틀 목록에 열린 것만 true.
-  // 수치(SCALE·적 수치)는 스테이지마다 같다. 스테이지 2 적은 스테이지 1 짝과 같은 수치·AI (이슈 1 보류).
+  // 적 기본 수치·AI·SCALE 은 스테이지마다 같다 (스테이지 2 적은 스테이지 1 짝과 같은 수치·AI). 스테이지마다 다른 건 곡선 배율 STAGE_MUL 뿐 (위).
   var STAGES = {
     1: {
       no: 1, name: "균열 저택", door: "잿빛 왕관 · 헌트 나우", boss: "셀레스", open: true, bgm: "sfx/bgm-stage1.mp3", bg: null,
@@ -608,6 +657,28 @@
     // 성장 값(Lv2 이상·갈림길)이 있을 때만. 새 저장은 키 자체가 없다
     if (g) run.growth = g;
     if (qd) run.quest = qd.id;
+    // 승천 (하드만): extra.asc. 「녹슨 장비」 = 장비 효과 절반 · 「쇠약」 = 최대 HP −12% (성장 값을 고쳐 찍는다)
+    if (extra && extra.asc > 0 && run.diff === "hard") {
+      run.asc = Math.min(ASC_MAX, extra.asc | 0);
+      var ar0 = ascRules(run);
+      if (ar0.gear !== 1 || ar0.maxHp !== 1) {
+        var g2 = JSON.parse(JSON.stringify(run.growth || {}));
+        active.forEach(function (id) {
+          var e = g2[id] || (g2[id] = { lv: 1, hp: C.CAST[id].hp, atk: C.CAST[id].atk, perks: {} });
+          if (ar0.gear !== 1 && e.gear && e.gfx) {
+            var fx = e.gfx;
+            if (fx.hp) e.hp = Math.round(e.hp / (1 + fx.hp) * (1 + fx.hp * ar0.gear));
+            if (fx.atk) e.atk = Math.round(e.atk / (1 + fx.atk) * (1 + fx.atk * ar0.gear) * 10) / 10;
+            if (e.gx) Object.keys(e.gx).forEach(function (k) { e.gx[k] = e.gx[k] * ar0.gear; });
+          }
+          if (ar0.maxHp !== 1) e.hp = Math.round(e.hp * ar0.maxHp);
+          run.party[id].hp = Math.min(run.party[id].hp, e.hp);
+          if (ar0.maxHp !== 1) run.party[id].hp = e.hp;
+        });
+        run.growth = g2;
+      }
+    }
+    if (extra && extra.daily) run.daily = extra.daily;
     // ③ 컨텐츠 (meta 가 있을 때만): 유물 후보 · 3층 강적 변종 · 균열 거울
     if (extra) {
       if (extra.relics && extra.relics.length) run.relicPool = extra.relics.filter(function (id) { return BOONS[id] && BOONS[id].relic; });
@@ -666,7 +737,7 @@
     var carry = {};
     ids.forEach(function (id) {
       var p = run.party[id];
-      carry[id] = { hp: p.hp, gauge: Math.min(100, p.gauge + AFTER.gaugeStart) };
+      carry[id] = { hp: p.hp, gauge: Math.min(100, p.gauge + (ascOf(run) && ascRules(run).gaugeStart != null ? ascRules(run).gaugeStart : AFTER.gaugeStart)) };
     });
     var cfg = {
       seed: seed,
@@ -677,6 +748,7 @@
       mods: mods(run),
     };
     if (run.growth) cfg.growth = run.growth;
+    if (ascOf(run) && ascRules(run).heal != null) cfg.mods.healMul = ascRules(run).heal;
     // 동료 조합 (docs/SYNERGY.md): 켜진 게 있을 때만 키가 생긴다 (시작 셋 = 없음)
     var syn = C.synergyOf(ids);
     if (syn.length) cfg.syn = syn;
@@ -696,10 +768,11 @@
     run.stats.breaks += s.stats.breaks;
     run.stats.maxHit = Math.max(run.stats.maxHit, s.stats.maxHit);
     if (s.phase !== "win") { run.over = "lose"; return "lose"; }
-    var seal = run.boons.indexOf("seal") >= 0;
+    var seal = run.boons.indexOf("seal") >= 0, ar = ascOf(run) ? ascRules(run) : null;
+    var rv = ar && ar.revive != null ? ar.revive : AFTER.reviveHp, kg = ar && ar.keepGauge != null ? ar.keepGauge : AFTER.keepGauge;
     s.allies.forEach(function (u) {
-      var hp = u.alive ? u.hp : Math.round(u.maxHp * (seal ? 0.4 : AFTER.reviveHp));
-      run.party[u.id] = { hp: Math.max(1, hp), gauge: u.alive ? Math.round(u.gauge * AFTER.keepGauge) : 0 };
+      var hp = u.alive ? u.hp : Math.round(u.maxHp * (seal ? Math.max(0.4, rv) : rv));
+      run.party[u.id] = { hp: Math.max(1, hp), gauge: u.alive ? Math.round(u.gauge * kg) : 0 };
     });
     if (node.variant) run.bonusXp = (run.bonusXp || 0) + VARIANT_XP;
     if (node.kind === "boss") { run.over = "win"; return "win"; }
@@ -835,7 +908,7 @@
 
   var api = {
     SAVE_KEY: SAVE_KEY, FLOORS: FLOORS, ROOMS: ROOMS, KIND: KIND, PACKS: PACKS, FLOOR_PLAN: FLOOR_PLAN,
-    SCALE: SCALE, DIFF: DIFF, DIFF_KEY: DIFF_KEY, diffOf: diffOf, enemyScale: enemyScale, BOONS: BOONS, REST: REST, AFTER: AFTER, EVENT: EVENT,
+    SCALE: SCALE, STAGE_MUL: STAGE_MUL, QUEST_MUL: QUEST_MUL, ATK_SHARE: ATK_SHARE, HARD_CURVE: HARD_CURVE, ASC: ASC, ASC_MAX: ASC_MAX, ASC_BASE: ASC_BASE, ascText: ascText, ascBan: ascBan, ascOf: ascOf, ascRules: ascRules, restHeal: restHeal, stageMul: stageMul, DIFF: DIFF, DIFF_KEY: DIFF_KEY, diffOf: diffOf, enemyScale: enemyScale, BOONS: BOONS, REST: REST, AFTER: AFTER, EVENT: EVENT,
     HEAL_RELICS: HEAL_RELICS, RARITY: RARITY, boonRarity: boonRarity,
     STAGES: STAGES, stageOf: stageOf, QUESTS: QUESTS, addQuest: addQuest, floorsOf: floorsOf, openStages: openStages, josa: josa, STAGE_KEY: "fcb-stages-v1",
     newRun: newRun, current: current, battleConfig: battleConfig, applyBattle: applyBattle,
