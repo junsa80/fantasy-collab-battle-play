@@ -155,10 +155,20 @@
     return out;
   }
 
+  // ---------- 권장 레벨 (docs/STAGES.md 「권장 레벨」) ----------
+  // [보통, 하드]. tools/reclevel-run.sh: 그때 쓸 수 있는 무난한 셋 중 끝까지 키우면 깨는 셋의 승률 중앙값이 50%를 넘는 가장 낮은 레벨
+  // (casual · 신중 경로 · 그 레벨쯤 가진 장비 자동 장착). 뒤 스테이지 ≥ 앞 · 하드 ≥ 보통으로 다듬음. 9 = 「8+」
+  var REC = { s1: [1, 3], s2: [3, 3], s3: [3, 3], s4: [3, 3], s5: [6, 6], q1: [1, 2], q2: [1, 2], q3: [1, 1], q4: [6, 6] };
+  function recLevel(key, diff) { var r = REC[key]; return r ? r[diff === "hard" ? 1 : 0] : null; }
+  function recText(n) { return "권장 Lv " + (n > MAX_LV ? MAX_LV + "+" : n); }
+  function avgLevel(m, ids) { if (!ids || !ids.length) return 1; return ids.reduce(function (a, id) { return a + level(m, id); }, 0) / ids.length; }
+  // ok = 평균이 권장 이상 · near = 1~2 아래 · far = 그보다 아래
+  function recState(avg, n) { return avg >= n ? "ok" : avg >= n - 2 ? "near" : "far"; }
+
   // ---------- ④ 장비 (docs/GEAR.md) ----------
   // 동료 하나에 한 칸. 장비는 한 벌씩만 (두 동료가 같은 장비를 낄 수 없다).
-  // 「최강」 = 그 동료·그 셋·그 난이도에서 실제로 쓸모 있는 값 (gearParts). 등급은 안 본다. 셋 통째로 가장 값이 큰 묶음.
-  // tier 1 일반 · 2 희귀 · 3 영웅 · 4 유니크(한 저장에 한 번, src 에서만). 자동 장착 값은 아래 VAL · gearParts
+  // 「최강」 = 그 동료·그 셋(세라 유무)·그 난이도에서 승률을 실제로 가장 올리는 묶음 (값 표 GV, 시뮬로 맞춤). 등급은 안 본다.
+  // tier 1 일반 · 2 희귀 · 3 영웅 · 4 유니크(한 저장에 한 번, src 에서만). 자동 장착 값은 아래 GV
   var GEAR = {
     cord: { name: "붕대 손목끈", tier: 1, heal: 1, fx: { regen: 0.03 }, text: "매 라운드 끝 자기 HP 3% 회복" },
     whet: { name: "숫돌 단검", tier: 1, fx: { atk: 0.08 }, text: "공격 +8%" },
@@ -178,9 +188,9 @@
     // 유니크 ◆ — 강하지만 대가가 있다. 나온 곳에서 딱 한 번
     article18: { name: "제18조 원본", tier: 4, src: "q1", world: "deck", fx: { ultGauge: 20, ultAll: 0.07, atk: -0.05 }, text: "필살기를 쓰면 다른 아군 게이지 +20 · 아군 전원 HP 7% 회복 · 공격 −5%", heal: 1 },
     lastqueen: { name: "여왕의 마지막 패", tier: 4, src: "q2", world: "deck", fx: { killGauge: 25, killHeal: 0.1, atk: 0.05, hp: -0.08 }, text: "적을 쓰러뜨리면 자기 게이지 +25 · HP 10% 회복 · 공격 +5% · 최대 HP −8%", heal: 1 },
-    ledger: { name: "칸 값 장부", tier: 4, src: "q3", world: "rune", heal: 1, fx: { regenLow: 0.03, atk: -0.15 }, text: "매 라운드 끝 가장 다친 아군 HP 3% 회복 · 공격 −15%" },
+    ledger: { name: "칸 값 장부", tier: 4, src: "q3", world: "rune", heal: 1, fx: { regenLow: 0.025, atk: -0.15 }, text: "매 라운드 끝 가장 다친 아군 HP 2.5% 회복 · 공격 −15%" },
     hartmann: { name: "하르트만 장부", tier: 4, src: "q4", world: "ashen", fx: { gauge: 35, hp: 0.08, atk: -0.05 }, text: "전투 시작 필살 게이지 +35 · 최대 HP +8% · 공격 −5%" },
-    crown: { name: "무너진 왕관", tier: 4, src: "stage5", world: "ashen", heal: 1, fx: { low: 1.35, leech: 0.1 }, text: "HP 40% 이하면 공격 ×1.35 · 준 피해 10% 회복" },
+    crown: { name: "무너진 왕관", tier: 4, src: "stage5", world: "ashen", heal: 1, fx: { low: 1.3, leech: 0.08 }, text: "HP 40% 이하면 공격 ×1.3 · 준 피해 8% 회복" },
     grail: { name: "성녀의 성배", tier: 4, src: "hard", world: "ashen", heal: 1, fx: { guardAll: 0.07, regen: 0.03, atk: -0.08 }, text: "방어하면 아군 전원 HP 7% · 매 라운드 끝 자기 HP 3% 회복 · 공격 −8%" },
   };
   var RARITY = ["", "일반", "희귀", "영웅", "유니크"];
@@ -202,60 +212,84 @@
   function stars(gid) { return GEAR[gid].tier === 4 ? "◆" : "★★★".slice(0, GEAR[gid].tier); }
   function rarity(gid) { return RARITY[GEAR[gid].tier]; }
   function whereText(gid) { var G = GEAR[gid]; return G.tier === 4 ? SRC_TEXT[G.src] + " · 한 번만" : DROP_TEXT[G.tier]; }
-  // 장비 값 (docs/GEAR.md 「자동 장착」): 효과마다 「승률 몇 점쯤」으로 환산한 합. 대가(공격 −% 등)도 그대로 뺀다.
-  // relic-sim D(장비 하나씩) 결과로 맞춘 계수. 역할 · 세라 유무 · 난이도(하드는 HP·회복 무게 ↑)를 본다. 등급은 안 본다.
-  var VAL = {
-    hp: { tank: 0.45, dps: 0.2, support: 0.3, healer: 0.35 },          // 최대 HP 1%당 (하드 ×1.5)
-    atk: { tank: 0.15, dps: 0.3, support: 0.05, healer: 0.02 },        // 공격 +1%당. −면 ×3 (공격 자리 ×5: 처치 타이밍이 밀려 크게 진다)
-    regen: { tank: 1.6, dps: 0.9, support: 0.9, healer: 0.6 },         // 자기 라운드 회복 1%당
-    regenLow: { tank: 2.0, dps: 0.25, support: 1.2, healer: 2.2 },  // 가장 다친 아군 1%당. 공격 자리에는 거의 안 준다
-    ultAll: 0.25, killAll: 0.9,
-    guardAll: { tank: 0.25, healer: 0.7, dps: 0.2, support: 0.3 },
-    leech: { tank: 0.08, dps: 0.18, support: 0.05, healer: 0.03 },
-    killHeal: { tank: 0.08, dps: 0.2, support: 0.05, healer: 0.03 },
-    guardHeal: { tank: 0.18, dps: 0.05, support: 0.05, healer: 0.05 },
-    ultGauge: 0.06, killGauge: { tank: 0.02, dps: 0.05, support: 0.02, healer: 0.01 },
-    low: { tank: 0.6, dps: 0.3, support: 0.2, healer: 0 },            // (배율 −1) × 10 당. 공격 자리는 무조건 공격이 더 크다
+  // 값 표 GV[난이도][세라 있음 s / 없음 n][동료] = 장비 순서(GEAR_LIST)대로 21칸, 단위 0.01 승률 로짓.
+  // tools/gear-fit.js 로 220 파티 × 칸 × 장비 하나씩 (Lv4 · 스테이지 1 · 300런) 돌려 맞춘 값 (tools/gear-fit-make.js → tools/gear-val.json). 장비 효과를 바꾸면 다시 돌린다.
+  var GV = {
+    normal: {
+      s: {
+        arin: "0 4 -3 5 -2 -5 -1 2 5 5 -2 -1 14 5 6 10 -13 -10 0 0 -10",
+        sera: "31 0 46 15 2 10 11 22 4 0 16 0 3 22 0 -9 -6 11 55 11 34",
+        aria: "-2 6 9 7 -7 -3 -2 9 -9 10 16 -8 -18 7 -4 6 -11 -22 -10 8 -7",
+        garen: "-16 3 -1 3 -5 -9 -5 4 -9 3 5 -6 10 1 1 2 -21 22 -13 -4 -22",
+        mariel: "1 1 8 4 -3 0 0 5 -3 2 7 11 7 6 -2 16 -6 10 4 2 -3",
+        leo: "-5 3 2 2 -2 -3 -5 4 -12 6 4 4 4 2 4 13 -17 27 -2 -2 -2",
+        serena: "10 0 14 5 -7 -3 -4 10 -9 1 7 0 7 10 2 20 -30 24 12 -2 13",
+        odette: "7 5 7 5 0 0 2 10 0 6 9 8 12 9 2 11 -9 14 7 1 2",
+        noel: "-4 6 7 8 -2 -4 -6 4 -4 5 5 9 9 6 3 13 -4 10 2 -2 -7",
+        lin: "-1 1 6 5 -5 -1 -2 4 -10 3 2 7 -4 6 2 19 -11 34 6 -1 0",
+        arthur: "-18 -6 2 -1 2 -18 -17 2 -9 -3 5 3 -6 -1 -12 7 -27 7 -1 -15 -15",
+        kael: "-9 3 5 4 5 -8 -4 4 3 8 5 12 17 10 0 16 -9 18 8 -7 -8",
+      },
+      n: {
+        arin: "50 25 30 35 9 40 48 34 23 32 40 46 52 43 32 32 49 15 42 62 35",
+        aria: "32 10 12 -5 10 46 29 13 -3 17 17 23 29 5 7 20 21 13 -16 79 28",
+        garen: "107 14 27 19 4 20 6 36 -7 24 28 53 99 31 35 45 -30 98 7 40 76",
+        mariel: "19 5 18 12 16 9 11 23 13 9 33 30 14 16 2 22 -9 39 19 30 25",
+        leo: "54 37 37 32 9 57 42 31 15 47 35 40 29 48 25 17 53 -5 5 77 28",
+        serena: "3 17 3 13 6 11 7 12 -1 31 22 26 28 17 17 17 12 -4 -17 33 -6",
+        odette: "0 16 5 2 2 2 3 13 13 19 17 15 14 12 9 9 3 14 17 22 4",
+        noel: "7 5 -3 -1 -2 -2 2 4 -1 11 17 23 19 1 6 16 3 20 -7 15 9",
+        lin: "-2 28 7 15 1 9 12 11 7 35 46 17 18 24 27 26 20 7 -13 41 -18",
+        arthur: "48 20 39 23 0 32 20 22 -9 31 25 54 61 32 37 65 11 46 12 43 22",
+        kael: "48 14 51 27 -5 17 14 29 -11 26 35 44 83 38 21 48 3 93 16 35 36",
+      },
+    },
+    hard: {
+      s: {
+        arin: "12 16 6 4 1 18 13 9 9 22 17 19 33 13 6 23 12 -5 9 24 -1",
+        sera: "15 4 19 12 5 9 2 13 11 3 11 11 9 14 4 0 -30 2 34 9 13",
+        aria: "-6 7 17 14 -2 1 -8 12 -5 8 14 9 9 14 7 15 -10 -18 12 6 -9",
+        garen: "-12 11 6 7 1 -2 -10 6 0 11 7 12 12 10 11 0 -7 -12 -4 1 -25",
+        mariel: "-2 6 10 4 2 -2 -6 8 -2 8 5 12 15 6 1 17 -5 -3 -11 2 -4",
+        leo: "3 1 8 5 0 3 -2 5 -1 3 6 7 9 7 3 9 -15 -15 -5 7 -12",
+        serena: "3 15 9 10 -2 0 -3 5 -7 17 8 3 9 14 11 -3 -7 -21 -5 3 -17",
+        odette: "17 12 13 5 9 9 10 9 10 18 2 22 24 12 13 28 7 7 20 11 5",
+        noel: "5 4 14 10 -3 2 1 14 2 8 13 13 6 14 9 14 -4 -5 9 5 -2",
+        lin: "-5 4 2 4 -2 -3 -6 2 -4 6 3 -4 2 3 5 10 1 -13 -6 1 -11",
+        arthur: "-1 23 11 20 -1 -3 -4 11 -3 26 12 16 16 23 9 -2 -5 -3 -4 0 -15",
+        kael: "-4 7 3 2 -3 0 -3 -2 -3 11 2 10 10 5 7 15 -7 -7 -4 3 -19",
+      },
+      n: {
+        arin: "49 27 21 33 8 24 5 37 31 32 36 42 48 33 21 37 32 36 54 54 41",
+        aria: "2 -3 13 6 5 3 -2 10 -3 -11 26 2 8 5 5 15 7 -19 -23 32 11",
+        garen: "33 14 59 42 -20 27 22 71 10 15 36 58 86 46 35 56 -26 89 52 33 61",
+        mariel: "-18 4 -3 1 2 -13 -8 4 8 6 7 -10 -3 5 -9 -20 -18 -16 -14 -2 -3",
+        leo: "31 34 2 16 -31 37 23 13 -37 52 12 -26 19 30 14 -1 -9 -27 -92 51 -6",
+        serena: "42 5 22 12 0 42 24 14 -1 -3 42 17 51 10 26 44 -15 68 -3 59 42",
+        odette: "-20 -3 2 0 -2 -3 0 0 12 4 4 -2 -3 0 -8 -10 -2 0 14 5 -13",
+        noel: "8 6 7 9 6 -1 -6 6 6 7 21 12 6 0 2 5 -5 -2 3 20 13",
+        lin: "-1 6 9 7 -2 9 5 13 2 8 44 7 3 9 7 -10 -22 -9 -19 43 8",
+        arthur: "49 9 12 -2 -2 35 10 2 -11 11 5 40 47 2 17 18 -5 79 -8 44 50",
+        kael: "20 10 16 14 -4 -6 -20 17 -3 10 18 5 62 14 2 14 -11 83 14 5 19",
+      },
+    },
   };
-  // 시작 게이지 1점당 (동료마다): 세라는 성역을 일찍, 레오는 큰 획을 일찍. 아리아는 「부위 분쇄」를 충전 적에 아껴야 해서 −
-  var GAUGE_W = { sera: 0.3, leo: 0.15, odette: 0.12, noel: 0.12, mariel: 0.08, aria: -0.1 };
-  var FINISH = { leo: 1.6, serena: 1.6, lin: 1.6 };   // 처치 회복·처치 게이지가 잘 터지는 동료
-  var MIN_VAL = 1;   // 이보다 작은 값의 장비는 안 낀다 (거의 0 = 안 끼는 것과 같음)
-  var HEAL_KEYS = ["regen", "regenLow", "ultAll", "killAll", "guardAll", "leech", "killHeal", "guardHeal"];
-  // 한 장비의 값 = { heal, other } (회복 몫은 겹치면 줄어서 따로)
-  function gearParts(gid, id, party, ctx) {
-    var fx = GEAR[gid].fx, r = ROLE[id] || "dps", hard = ctx && ctx.diff === "hard", heal = 0, other = 0;
-    Object.keys(fx).forEach(function (k) {
-      var v = fx[k], pts;
-      if (k === "gauge") pts = v * (GAUGE_W[id] != null ? GAUGE_W[id] : 0.05);
-      else {
-        var w = VAL[k]; if (w == null) return;
-        var c = typeof w === "number" ? w : (w[r] || 0);
-        if ((k === "killHeal" || k === "killGauge") && FINISH[id]) {
-          var dpsN = party.filter(function (pid) { return (ROLE[pid] || "dps") === "dps"; }).length;
-          c *= dpsN >= 2 ? FINISH[id] : 0.55;
-        }
-        pts = k === "low" ? (v - 1) * 100 * c / 10 : k === "ultGauge" || k === "killGauge" ? v * c : v * 100 * c;
-        if (k === "atk" && v < 0) pts *= r === "dps" ? 5 : 3;
-        if (k === "hp" && hard) pts *= 1.5;
-      }
-      if (HEAL_KEYS.indexOf(k) >= 0) heal += pts * (hard ? 1.2 : 1); else other += pts;
-    });
-    if (party.indexOf("sera") >= 0) heal *= 0.45;   // 세라가 있으면 회복은 덜 급하다
-    return { heal: heal, other: other };
+  var GV_N = {};   // 문자열 → 숫자 배열 (처음 쓸 때 한 번)
+  function gvRow(diff, ctx, id) {
+    var key = diff + ctx + id;
+    if (!GV_N[key]) { var t = GV[diff] && GV[diff][ctx] && GV[diff][ctx][id]; GV_N[key] = t ? t.split(" ").map(Number) : GEAR_LIST.map(function () { return 0; }); }
+    return GV_N[key];
   }
-  function gearScore(gid, id, party, ctx) { var p = gearParts(gid, id, party, ctx); return Math.round((p.heal + p.other) * 10) / 10; }
-  // 장비 묶음 값: 회복 몫은 큰 것부터 1 · 0.7 · 0.5 (겹치면 덜 는다)
-  function setValue(list, party, ctx) {
-    var hs = [], o = 0;
-    list.forEach(function (x) { var p = gearParts(x.g, x.id, party, ctx); hs.push(p.heal); o += p.other; });
-    hs.sort(function (a, b) { return b - a; });
-    var DIM = [1, 0.7, 0.5];
-    hs.forEach(function (h, i) { o += h * (h > 0 ? DIM[i] : 1); });
-    return o;
+  var MIN_VAL = 3;   // 이보다 작은 값(0.03 로짓 ≈ 승률 1%p 미만)의 장비는 안 낀다 → 장비 없는 것보다 나빠지지 않게
+  // 한 장비의 값: 그 동료 · 그 셋(세라 유무) · 그 난이도에서 승률을 얼마나 올리는지. 등급은 안 본다
+  function gearScore(gid, id, party, ctx) {
+    var diff = ctx && ctx.diff === "hard" ? "hard" : "normal", c = party.indexOf("sera") >= 0 ? "s" : "n";
+    var i = GEAR_LIST.indexOf(gid); return i < 0 ? 0 : gvRow(diff, c, id)[i];
   }
+  // 장비 묶음 값 = 합 (로짓 더하기. 묶음 시뮬로 확인: docs/GEAR.md)
+  function setValue(list, party, ctx) { return list.reduce(function (a, x) { return a + gearScore(x.g, x.id, party, ctx); }, 0); }
   function wearer(m, gid) { var eq = gearSave(m).eq; return Object.keys(eq).filter(function (id) { return eq[id] === gid; })[0] || null; }
-  // 자동 장착: 파티 셋에 가진 장비 중 「값」(gearParts · setValue)이 가장 큰 묶음을 통째로 찾는다 (빈 칸 포함, 겹침 없음).
+  // 자동 장착: 파티 셋에 가진 장비 중 「값」(GV · setValue)이 가장 큰 묶음을 통째로 찾는다 (빈 칸 포함, 겹침 없음).
   // 직접 고른(잠금) 칸은 두고 값에만 넣는다. 값이 MIN_VAL 미만인 장비는 안 낀다 → 장비 없는 것보다 나빠지지 않게. 쉬는 동료가 낀 것도 가져온다.
   function autoEquip(m, party, opts) {
     var gs = gearSave(m), before = {}, ctx = { diff: opts && opts.diff };
@@ -438,7 +472,8 @@
     MAX_LV: MAX_LV, THRESH: THRESH, XP: XP, PER_LV: PER_LV, PERK: PERK, PICKS: PICKS, PERK_LV: PERK_LV,
     xpOf: xpOf, level: level, levelOfXp: levelOfXp, perkKeys: perkKeys, pending: pending, choosePerk: choosePerk, stats: stats, statsAt: statsAt, growthMap: growthMap, runXp: runXp, addXp: addXp, award: award, nextAt: nextAt,
     BOND_LV: BOND_LV, BOND_XP: BOND_XP, MIRROR_XP: MIRROR_XP, BONDS: BONDS, bondNext: bondNext, hearBond: hearBond, RELIC_LV: RELIC_LV, RELIC_OF: RELIC_OF, relicsOf: relicsOf,
-    GEAR: GEAR, GEAR_LIST: GEAR_LIST, VAL: VAL, setValue: setValue, ROLE: ROLE, ROLE_NAME: ROLE_NAME, gearOf: gearOf, gearScore: gearScore, stars: stars, autoEquip: autoEquip, equip: equip, dropGear: dropGear, grantUnique: grantUnique, wearer: wearer, DROP: DROP, RARITY: RARITY, rarity: rarity, whereText: whereText, SRC_TEXT: SRC_TEXT };
+    REC: REC, recLevel: recLevel, recText: recText, avgLevel: avgLevel, recState: recState,
+    GEAR: GEAR, GEAR_LIST: GEAR_LIST, GV: GV, setValue: setValue, ROLE: ROLE, ROLE_NAME: ROLE_NAME, gearOf: gearOf, gearScore: gearScore, stars: stars, autoEquip: autoEquip, equip: equip, dropGear: dropGear, grantUnique: grantUnique, wearer: wearer, DROP: DROP, RARITY: RARITY, rarity: rarity, whereText: whereText, SRC_TEXT: SRC_TEXT };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.FCBMeta = api;
 })(this);

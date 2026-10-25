@@ -84,6 +84,15 @@
     return b;
   }
 
+  // 권장 레벨 표지 (docs/STAGES.md): key = s1…s5 / q1…q4, ids = 그 셋. 평균 레벨과 비교해 색
+  var REC_HINT = { ok: "권장 레벨 이상", near: "레벨을 올리면 수월해져요", far: "레벨을 올리면 수월해져요 · 지금은 많이 어려워요" };
+  function recInfo(key, ids, m) {
+    var n = M.recLevel(key, loadDiff()); if (n == null) return null;
+    var avg = M.avgLevel(m || loadMeta(), ids), stt = M.recState(avg, n);
+    return { n: n, avg: avg, state: stt, text: M.recText(n), hint: REC_HINT[stt] };
+  }
+  function recBadge(info, id) { return info ? '<span class="rec rec-' + info.state + '"' + (id ? ' id="' + id + '"' : "") + ">" + esc(info.text) + "</span>" : ""; }
+
   // ---------- 스테이지 ----------
   function stage() { return R.stageOf(run); }
   function stageScene() {
@@ -497,13 +506,15 @@
     if (sv) $("#continue-sub").textContent = (sv.quest ? "📜 " : "") + R.stageOf(sv).name + (R.diffOf(sv) === "hard" ? " · 하드" : "") + " · " + (Math.min(sv.floor, R.floorsOf(sv) - 1) + 1) + "층 · " + R.partySummary(sv).map(function (p) { return p.name + " " + p.hp; }).join(" · ");
     var rec = loadStages();
     var list = $("#stage-list"); list.innerHTML = "";
-    var shut = [];
+    var shut = [], gm0 = loadMeta();
     Object.keys(R.STAGES).map(Number).forEach(function (n) {
       var st = R.STAGES[n];
       if (!st.open) { shut.push(n + " " + st.name); return; }
       var cl = (rec.clears[n] ? " · 클리어 " + rec.clears[n] : "") + (rec.hard && rec.hard[n] ? " · 하드 " + rec.hard[n] : "");
       var b = btn(n + " · " + st.name, (sv ? "새로 시작 · " : "") + st.door + " · 보스 " + st.boss + cl, "stage" + (!sv && n === rec.last ? " primary" : ""), function () { startStage(n); }, n === 1 ? "btn-start" : "btn-stage-" + n);
       b.dataset.stage = n;
+      var ri = recInfo("s" + n, gm0.unlocked.length <= 3 ? gm0.unlocked : M.defaultParty(gm0), gm0);
+      if (ri) { b.insertAdjacentHTML("beforeend", recBadge(ri, "rec-s" + n)); b.title = ri.text + " · 늘 쓰는 셋 평균 Lv" + ri.avg.toFixed(1) + " · " + ri.hint; }
       list.appendChild(b);
     });
     $("#stage-shut").textContent = shut.length ? shut.join(" · ") + " — 준비 중" : "";
@@ -530,10 +541,14 @@
     showParty();
   }
   // 의뢰 출발: 필수 동료를 먼저 세우고 나머지는 늘 쓰던 셋에서 채운다
+  function questParty(m, id) {
+    var ids = Q.QUESTS[id].need.slice();
+    M.defaultParty(m).concat(m.unlocked).forEach(function (x) { if (ids.length < 3 && ids.indexOf(x) < 0 && m.unlocked.indexOf(x) >= 0) ids.push(x); });
+    return ids;
+  }
   function startQuest(id) {
     var m = loadMeta(), need = Q.QUESTS[id].need;
-    var ids = need.slice();
-    M.defaultParty(m).concat(m.unlocked).forEach(function (x) { if (ids.length < 3 && ids.indexOf(x) < 0) ids.push(x); });
+    var ids = questParty(m, id);
     pick = { stage: 0, quest: id, ids: ids, look: need[0] };
     showParty();
   }
@@ -543,6 +558,11 @@
     $("#party-stage").textContent = (qd ? "📜 의뢰 · " + st.name : pick.stage + " · " + st.name) + (loadDiff() === "hard" ? " · 하드" : "");
     $("#party-sub").textContent = qd ? "필수 " + qd.need.map(function (w) { return C.CAST[w].name; }).join("·") + " · " + pick.ids.length + "/3"
       : "출전 셋 · " + pick.ids.length + "/3 · 해금 " + m.unlocked.length + "명";
+    var pri = recInfo(qd ? pick.quest : "s" + pick.stage, pick.ids, m), prEl = $("#party-rec");
+    if (prEl) {
+      prEl.hidden = !pri;
+      if (pri) { prEl.className = "party-rec rec-" + pri.state; prEl.innerHTML = recBadge(pri) + " <span>지금 셋 평균 Lv" + pri.avg.toFixed(1) + " · " + esc(pri.hint) + "</span>"; }
+    }
     var grid = $("#party-grid"); grid.innerHTML = "";
     m.unlocked.forEach(function (id) {
       var cd = C.CAST[id], i = pick.ids.indexOf(id);
@@ -663,7 +683,9 @@
         : stt === "lead" ? R.josa(C.CAST[q.who].name, "이", "가") + " 할 말이 있다"
         : stt === "open" ? q.place + " · 4층 · 보스 " + q.boss
         : "이야기 「" + q.chapter.title + "」 · 다시 도전";
-      el.innerHTML = '<span class="qc-face">' + (stt === "locked" ? "🔒" : qFace(q.who)) + '</span><span class="qc-t"><b>「' + esc(q.name) + "」 <em>" + STATE_TEXT[stt] + "</em></b><small>" + esc(sub) + "</small></span>";
+      var qri = stt === "locked" ? null : recInfo(id, questParty(m, id), m);
+      el.innerHTML = '<span class="qc-face">' + (stt === "locked" ? "🔒" : qFace(q.who)) + '</span><span class="qc-t"><b>「' + esc(q.name) + "」 <em>" + STATE_TEXT[stt] + "</em></b><small>" + esc(sub) + "</small>" +
+        (qri ? '<small class="rec-row">' + recBadge(qri, "rec-" + id) + " " + esc(qri.hint) + "</small>" : "") + "</span>";
       box.appendChild(el);
     });
     A.show("scr-quest");

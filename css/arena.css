@@ -560,3 +560,15 @@ body[data-stage="5"] #scr-map, body[data-stage="5"] #scr-node, body[data-stage="
 .cx .cx-w { color: #8fe0a8; }
 .cx.no { opacity: .78; border-style: dashed; }
 .cx.no b { color: var(--muted); }
+
+/* 권장 레벨 표지 (docs/STAGES.md 「권장 레벨」): 초록 = 평균 Lv 이상 · 노랑 = 1~2 아래 · 빨강 = 더 아래 */
+.rec { display: inline-block; font-size: 12px; font-weight: 800; line-height: 1.3; padding: 1px 6px; border-radius: 999px; border: 1px solid currentColor; white-space: nowrap; }
+.rec-ok { color: #7fe0a0; }
+.rec-near { color: #f2c35a; }
+.rec-far { color: #ff8a7a; }
+.stage-list .btn.stage .rec { margin-top: 3px; }
+.qcard .rec-row { display: block; margin-top: 3px; font-size: 12px; }
+.qcard .rec-row .rec { margin-right: 2px; }
+.party-rec { margin: 4px 10px 0; font-size: 12px; line-height: 1.35; text-align: center; }
+.party-rec span { color: var(--muted, #c9c2b4); }
+.party-rec.rec-near span, .party-rec.rec-far span { color: inherit; }
