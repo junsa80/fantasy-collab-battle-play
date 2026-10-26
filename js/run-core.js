@@ -108,6 +108,7 @@
   // 승천 (하드 위): 단계마다 적 HP +2% · 공격 +2% 씩 쌓이고(기본), 그 단계만의 규칙 하나가 붙는다 (안 쌓임 → 단계마다 유리한 전략이 다르다).
   // 깨면 다음 단계가 열린다 (docs/STAGES.md 「승천」, 시뮬 tools/ascend-run.sh)
   var ASC_BASE = { hp: 0.02, atk: 0.02 };
+  // 6–10 규칙 2026-10-26 다시 맞춤 (docs/STAGES.md 「승천 6+ 곡선」): 벽 대신 오르막. 승천 0–5 · 기본 +2%/단계는 그대로
   var ASC = [
     null,
     { name: "첫 승천", text: "규칙 없음" },
@@ -115,11 +116,11 @@
     { name: "얕은 우물", text: "⛲ 휴식 회복 50% → 25%", rest: 0.25 },
     { name: "치유 약화", text: "아군이 받는 회복 −15%", heal: 0.85 },
     { name: "두꺼운 보스", text: "보스 HP +25%", boss: { hp: 0.25 } },
-    { name: "치유사 휴식", text: "세라 출전 불가 · 적 HP −10%", ban: ["sera"], hp: -0.1 },
-    { name: "녹슨 장비", text: "장비 효과 절반", gear: 0.5 },
-    { name: "짧은 숨", text: "적 HP −15% · 적 공격 +25%", hp: -0.15, atk: 0.25 },
-    { name: "쇠약", text: "아군 최대 HP −12%", maxHp: 0.88 },
-    { name: "균열의 끝", text: "보스 공격 +15% · 강적 HP +15% · 쓰러지면 HP 10%로 일어남", boss: { atk: 0.15 }, elite: { hp: 0.15 }, revive: 0.1 },
+    { name: "치유사 휴식", text: "세라 출전 불가 · 적 HP −32%", ban: ["sera"], hp: -0.32 },
+    { name: "녹슨 장비", text: "장비 효과 40%만", gear: 0.4 },
+    { name: "짧은 숨", text: "적 HP −15% · 적 공격 +12%", hp: -0.15, atk: 0.12 },
+    { name: "쇠약", text: "아군 최대 HP −8%", maxHp: 0.92 },
+    { name: "균열의 끝", text: "보스 공격 +8% · 강적 HP +15% · 쓰러지면 HP 10%로 일어남", boss: { atk: 0.08 }, elite: { hp: 0.15 }, revive: 0.1 },
   ];
   var ASC_MAX = ASC.length - 1;
   function ascOf(run) { return run && run.diff === "hard" && run.asc > 0 ? Math.min(ASC_MAX, run.asc | 0) : 0; }
@@ -657,7 +658,7 @@
     // 성장 값(Lv2 이상·갈림길)이 있을 때만. 새 저장은 키 자체가 없다
     if (g) run.growth = g;
     if (qd) run.quest = qd.id;
-    // 승천 (하드만): extra.asc. 「녹슨 장비」 = 장비 효과 절반 · 「쇠약」 = 최대 HP −12% (성장 값을 고쳐 찍는다)
+    // 승천 (하드만): extra.asc. 「녹슨 장비」 = 장비 효과 40% · 「쇠약」 = 최대 HP −8% (성장 값을 고쳐 찍는다)
     if (extra && extra.asc > 0 && run.diff === "hard") {
       run.asc = Math.min(ASC_MAX, extra.asc | 0);
       var ar0 = ascRules(run);
