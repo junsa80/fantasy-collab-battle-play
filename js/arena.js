@@ -156,6 +156,7 @@
       var st = [];
       if (u.atkUpTurns > 0) st.push('<span class="tag atk">공↑' + u.atkUpTurns + "</span>");
       if (u.guard) st.push('<span class="tag guard">방어</span>');
+      if (u.ward > 0) st.push('<span class="tag guard">룬 방패 ' + u.ward + "</span>");
       if (u.sanctum > 0) st.push('<span class="tag sanct">성역</span>');
       if (u.frost > 0) st.push('<span class="tag frost">' + esc(u.frostName || "빙결") + '</span>');
       $(".st", d).innerHTML = st.join("");
@@ -363,9 +364,11 @@
         anim(d, "hitflash");
         if (hs) setTimeout(function () { anim(d, e.big ? "bigshake" : "shake"); }, hs); else anim(d, e.big ? "bigshake" : "shake");
         if (e.big) { anim($("#scr-battle"), "shake"); vibrate(30); }
-        floatText(e.dst, String(e.amount), (e.big ? "big " : "") + (e.weak ? "weak " : "") + (u.side === "ally" ? "ally" : ""));
+        if (e.ward && !e.amount) floatText(e.dst, "막음", "label");
+        else floatText(e.dst, String(e.amount), (e.big ? "big " : "") + (e.weak ? "weak " : "") + (u.side === "ally" ? "ally" : ""));
         if (e.weak) setTimeout(function () { floatText(e.dst, "약점!", "label weak"); }, 120);
         if (e.guard) setTimeout(function () { floatText(e.dst, "방어", "label"); }, 120);
+        if (e.ward && e.amount) setTimeout(function () { floatText(e.dst, "방패 −" + e.ward, "label"); }, 120);
         return delay((e.big ? 420 : 300) + hs);
       case "heal":
         snd("heal");

@@ -666,11 +666,12 @@
         var g2 = JSON.parse(JSON.stringify(run.growth || {}));
         active.forEach(function (id) {
           var e = g2[id] || (g2[id] = { lv: 1, hp: C.CAST[id].hp, atk: C.CAST[id].atk, perks: {} });
-          if (ar0.gear !== 1 && e.gear && e.gfx) {
-            var fx = e.gfx;
+          // FCB-ASC-07 고침: HP·공격 없는 장비(부적·방울·왕관 …)도 줄이고, 배율 키 low(1.3 = +30%)는 보너스 부분만 줄인다 (예전엔 ×0.4 → 0.52 = 벌칙)
+          if (ar0.gear !== 1 && e.gear) {
+            var fx = e.gfx || {};
             if (fx.hp) e.hp = Math.round(e.hp / (1 + fx.hp) * (1 + fx.hp * ar0.gear));
             if (fx.atk) e.atk = Math.round(e.atk / (1 + fx.atk) * (1 + fx.atk * ar0.gear) * 10) / 10;
-            if (e.gx) Object.keys(e.gx).forEach(function (k) { e.gx[k] = e.gx[k] * ar0.gear; });
+            if (e.gx) Object.keys(e.gx).forEach(function (k) { e.gx[k] = k === "low" ? 1 + (e.gx[k] - 1) * ar0.gear : e.gx[k] * ar0.gear; });
           }
           if (ar0.maxHp !== 1) e.hp = Math.round(e.hp * ar0.maxHp);
           run.party[id].hp = Math.min(run.party[id].hp, e.hp);

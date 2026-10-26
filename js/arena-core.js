@@ -203,6 +203,8 @@
 
   // 동료 조합 (docs/SYNERGY.md). 시작 셋만으로는 하나도 켜지지 않는다
   var MARKERS = ["aria", "mariel", "odette", "noel", "kael"], FINISHERS = ["leo", "serena", "lin"];
+  // FCB-SYN-02: 생명의 칸 보스전 룬 방패 (고정 흡수량). 15 는 승천 6 아리아·레오·린 56% (기준 45 초과) → 10
+  var WARD_LIFERUNE = 10;
   function has(ids, id) { return ids.indexOf(id) >= 0; }
   function cnt(ids, list) { return ids.filter(function (id) { return has(list, id); }).length; }
   function ofOrigin(ids, o) { return ids.filter(function (id) { return CAST[id] && CAST[id].origin === o; }); }
@@ -229,13 +231,13 @@
   SYN.push(
     { id: "bandage", name: "군영의 붕대", desc: "세라 없이 · 매 라운드 끝 최저 HP 아군 +14%", line: "아서: 붕대는 내가 감는다. 방패는 내려놓지 마라.",
       need: function (ids) { return !has(ids, "sera") && cnt(ids, ["garen", "arthur", "kael"]) >= 2; } },
-    { id: "liferune", name: "생명의 칸", desc: "세라 없이 · 레오 필살 → 전원 +15% · 첫 회 부활", line: "레오: 칸에 이름을 새기면, 그 사람은 다시 선다.",
+    { id: "liferune", name: "생명의 칸", desc: "세라 없이 · 레오 필살 → 전원 +15% · 첫 회 부활 · 보스전 룬 방패 10", line: "레오: 칸에 이름을 새기면, 그 사람은 다시 선다.",
       need: function (ids) { return !has(ids, "sera") && has(ids, "leo") && (has(ids, "noel") || has(ids, "lin")); } },
     { id: "decree", name: "왕의 조항", desc: "두 서약 버프가 겹친다 · 필살 → 서로 게이지 +30", line: "오데트: 폐하의 서약 아래, 제17조를 읽겠습니다.",
       need: function (ids) { return has(ids, "arin") && has(ids, "odette"); } },
     { id: "audit", name: "성역의 장부", desc: "노엘 표시 → 세라 게이지 +10", line: "노엘: 치유 값은 장부에서 빼 두지. 마음껏 써.",
       need: function (ids) { return has(ids, "sera") && has(ids, "noel"); } },
-    { id: "hunt", name: "패와 사냥", desc: "마리엘 표시 +1턴 · 아리아 게이지 +25 · 분쇄 ×1.2", line: "아리아: 네 카드가 가리키는 데를 부순다.",
+    { id: "hunt", name: "패와 사냥", desc: "마리엘 표시 +1턴 · 아리아 게이지 +25 · 분쇄 ×1.2 · 보스 첫 턴 기절", line: "아리아: 네 카드가 가리키는 데를 부순다.",
       need: function (ids) { return has(ids, "aria") && has(ids, "mariel"); } }
   );
   var SYN_WHO = {"knights": ["arin", "sera", "garen", "arthur", "kael"], "stage": ["mariel", "serena", "odette"], "survey": ["leo", "noel", "lin"], "finisher": ["aria", "mariel", "odette", "noel", "kael", "leo", "serena", "lin"], "shield": ["sera", "garen", "kael"], "ledgers": ["noel", "kael"], "banquet": ["arin", "mariel"], "side": ["arin", "garen"], "clause": ["odette", "noel"], "decree": ["arin", "odette"], "audit": ["sera", "noel"], "hunt": ["aria", "mariel"], "bandage": ["garen", "arthur", "kael"], "liferune": ["leo", "noel", "lin"]};
@@ -316,7 +318,12 @@
     loadWave(s, 0);
     if (SY(s, "survey")) s.enemies.forEach(function (e) { e.mark = Math.max(e.mark, 1); });
     if (s.mods.markStart) s.enemies.forEach(function (e) { e.mark = Math.max(e.mark, s.mods.markStart); });
+    // FCB-SYN-02 퍼센트 없는 자리 (docs/SYNERGY.md): 보스가 처음부터 있는 전투에서 한 번만
+    var bossFight = s.enemies.some(function (e) { return e.boss; });
+    if (bossFight && SY(s, "hunt")) s.enemies.forEach(function (e) { if (e.boss) e.stun = 1; });
+    if (bossFight && SY(s, "liferune")) s.allies.forEach(function (u) { if (u.alive) u.ward = WARD_LIFERUNE; });
     planIntents(s);
+    if (bossFight && SY(s, "hunt")) s.enemies.forEach(function (e) { if (e.boss && e.intent && e.intent.kind === "stun") e.intent = { kind: "stun", name: "몰이", text: "사냥감 몰이! 이번 턴 행동 불가" }; });
     return s;
   }
 
@@ -358,9 +365,14 @@
     if (dst.sanctum > 0) v *= 0.7;
     v *= 0.92 + s.rand() * 0.16;
     var amt = Math.max(1, Math.round(v));
+    // 룬 방패 (생명의 칸, 보스전): 고정 피해 흡수. 퍼센트 아님 → 레벨·스테이지와 같이 커지지 않는다
+    var ward = 0;
+    if (dst.ward > 0 && src.side === "enemy") { ward = Math.min(dst.ward, amt); dst.ward -= ward; amt -= ward; }
     dst.hp = Math.max(0, dst.hp - amt);
     var big = amt >= (src.side === "ally" ? 45 : 30) || !!opt.big;
-    ev.push({ type: "hit", src: src.uid, dst: dst.uid, amount: amt, weak: weak, big: big, guard: dst.guard });
+    var hitEv = { type: "hit", src: src.uid, dst: dst.uid, amount: amt, weak: weak, big: big, guard: dst.guard };
+    if (ward) hitEv.ward = ward;
+    ev.push(hitEv);
     if (src.side === "ally") {
       s.stats.dealt += amt;
       if (amt > s.stats.maxHit) s.stats.maxHit = amt;
