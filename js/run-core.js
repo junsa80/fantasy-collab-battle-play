@@ -100,7 +100,7 @@
   function diffOf(run) { return run && run.diff === "hard" ? "hard" : "normal"; }
   // 스테이지 곡선 (docs/STAGES.md 「난이도 곡선」, 2026-10-25 사용자 요청 t341u 로 이슈 #1 보류 중 「스테이지별 적 배율·승천 배율」만 해제).
   // 적 HP × m, 공격 × (1 + (m − 1) × ATK_SHARE). 스테이지 1 = 1 (시작 셋 기준선 그대로). 의뢰는 QUEST_MUL. 값은 tools/curve-fit.js · tools/reclevel-run.sh 로 맞춤
-  var STAGE_MUL = { 1: 1, 2: 1.1, 3: 1.27, 4: 1.32, 5: 1.37 };
+  var STAGE_MUL = { 1: 1, 2: 1.1, 3: 1.27, 4: 1.28, 5: 1.295 }; // 4·5 = 1.32·1.37 → 1.28·1.295 (2026-10-26 후기 미세 완화, docs/STAGES.md 「후기 완화」)
   var QUEST_MUL = { q1: 1.32, q2: 1.43, q3: 1.5, q4: 0.95 };
   var ATK_SHARE = 0.6;
   // 하드는 곡선을 절반만 (하드 배율 ×1.25/×1.1 은 그대로 두고, 그 위에 곡선을 다 얹으면 3–5 하드가 Lv8 최강 셋도 40% 아래)
