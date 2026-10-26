@@ -354,15 +354,19 @@
         u = C.find(S, e.dst); d = cardOf(e.dst);
         var src = C.find(S, e.src);
         if (src && src.side === "ally") slash(e.dst, C.CAST[src.id].color);
+        else if (src) slash(e.dst, "#ff7a6a"); // 적 공격도 베기 자국(붉은색)
         snd("hit");
         update();
+        // 손맛(연출만, 전투 계산과 무관): 히트스톱(번쩍인 채 잠깐 멈춤) → 맞은 쪽 반대로 밀려났다 돌아오는 넉백 흔들림
+        var hs = settings.fx === "fast" ? 0 : (e.big ? 90 : 45);
+        if (d) d.style.setProperty("--kb", u.side === "ally" ? "7px" : "-9px");
         anim(d, "hitflash");
-        anim(d, e.big ? "bigshake" : "shake");
+        if (hs) setTimeout(function () { anim(d, e.big ? "bigshake" : "shake"); }, hs); else anim(d, e.big ? "bigshake" : "shake");
         if (e.big) { anim($("#scr-battle"), "shake"); vibrate(30); }
         floatText(e.dst, String(e.amount), (e.big ? "big " : "") + (e.weak ? "weak " : "") + (u.side === "ally" ? "ally" : ""));
         if (e.weak) setTimeout(function () { floatText(e.dst, "약점!", "label weak"); }, 120);
         if (e.guard) setTimeout(function () { floatText(e.dst, "방어", "label"); }, 120);
-        return delay(e.big ? 420 : 300);
+        return delay((e.big ? 420 : 300) + hs);
       case "heal":
         snd("heal");
         update(); floatText(e.dst, "+" + e.amount, "heal");

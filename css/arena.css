@@ -300,6 +300,8 @@ img.px, .px img { image-rendering: pixelated; }
   animation: numup .9s ease-out forwards; white-space: nowrap;
 }
 .num.big { font-size: 36px; color: #ffe08a; }
+.num.big { animation-name: numbig; } /* 큰 피해: 크게 튀어나왔다 줄어드는 숫자 */
+@keyframes numbig { 0% { opacity: 0; transform: translate(-50%, -20%) scale(.5); } 12% { opacity: 1; transform: translate(-50%, -60%) scale(1.55); } 28% { transform: translate(-50%, -72%) scale(1); } 100% { opacity: 0; transform: translate(-50%, -150%) scale(1); } }
 .num.heal { color: #7dffb4; }
 .num.weak { color: var(--hunt); }
 .num.ally { color: #ff8f8f; }
@@ -314,9 +316,9 @@ img.px, .px img { image-rendering: pixelated; }
 .hitflash { animation: hitflash .28s ease; }
 @keyframes hitflash { 0% { filter: brightness(3) saturate(0); } 100% { filter: none; } }
 .shake { animation: shake .32s ease; }
-@keyframes shake { 0%,100% { transform: translate(0,0); } 20% { transform: translate(-6px,2px); } 40% { transform: translate(5px,-2px); } 60% { transform: translate(-4px,1px); } 80% { transform: translate(3px,0); } }
+@keyframes shake { 0%,100% { transform: translate(0,0); } 12% { transform: translate(-3px, var(--kb, 0px)); } 30% { transform: translate(5px, calc(var(--kb, 0px) * .5)); } 50% { transform: translate(-4px,1px); } 72% { transform: translate(3px,0); } } /* 넉백(--kb, 맞은 쪽 반대) + 흔들림 */
 .bigshake { animation: bigshake .45s ease; }
-@keyframes bigshake { 0%,100% { transform: translate(0,0); } 15% { transform: translate(-10px,4px); } 30% { transform: translate(9px,-5px); } 45% { transform: translate(-7px,3px); } 60% { transform: translate(6px,-2px); } 80% { transform: translate(-3px,1px); } }
+@keyframes bigshake { 0%,100% { transform: translate(0,0); } 12% { transform: translate(-6px, calc(var(--kb, 0px) * 1.8)) rotate(-1.5deg); } 30% { transform: translate(9px, calc(var(--kb, 0px) * .8)) rotate(1deg); } 45% { transform: translate(-7px,3px); } 60% { transform: translate(6px,-2px); } 80% { transform: translate(-3px,1px); } }
 .lunge { animation: lunge .3s ease; }
 @keyframes lunge { 50% { transform: translateY(-12px) scale(1.04); } }
 .elunge { animation: elunge .3s ease; }
@@ -393,6 +395,7 @@ img.px, .px img { image-rendering: pixelated; }
 }
 @media (prefers-reduced-motion: reduce) {
   .ci-rays, .ta-rift { animation: none; }
+  .shake, .bigshake { animation-duration: .01s; }
 }
 
 /* ---------- 스테이지 (docs/STAGES.md) ---------- */
