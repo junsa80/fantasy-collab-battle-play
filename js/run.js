@@ -655,6 +655,8 @@
       var first = C.SYN.filter(function (c) { return on.indexOf(c.id) >= 0; })[0];
       sh += '<div class="ps-line">' + esc(first.line) + "</div>";
     } else sh = '<div class="ps-row ps-none">' + (pick.ids.length === 3 ? "조합 없음 — 데려온 동료를 섞으면 조합이 켜진다" : "셋을 고르면 켜질 조합이 보인다") + "</div>";
+    // FCB-SYN-01: 세라 없는 셋은 권장 레벨(기준 셋은 전부 세라 셋)보다 어렵다는 한 줄. class 는 ps-row 아님 (smoke-synergy 가 .ps-row 수를 셈)
+    if (pick.ids.length === 3 && pick.ids.indexOf("sera") < 0) sh += '<div class="ps-warn">세라가 없는 셋은 권장 레벨보다 더 어렵습니다</div>';
     $("#party-syn").innerHTML = sh;
     bindPerk($("#party-info"), showParty);
     var go = $("#btn-party-go"), ok3 = pick.ids.length === 3 && (!qd || Q.partyOk(pick.quest, pick.ids)) && !pick.ids.some(function (id) { return ban.indexOf(id) >= 0; });

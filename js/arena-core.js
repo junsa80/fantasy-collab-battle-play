@@ -227,7 +227,7 @@
       need: function (ids) { return has(ids, "odette") && has(ids, "noel"); } },
   ];
   SYN.push(
-    { id: "bandage", name: "군영의 붕대", desc: "세라 없이 · 매 라운드 끝 최저 HP 아군 +12%", line: "아서: 붕대는 내가 감는다. 방패는 내려놓지 마라.",
+    { id: "bandage", name: "군영의 붕대", desc: "세라 없이 · 매 라운드 끝 최저 HP 아군 +14%", line: "아서: 붕대는 내가 감는다. 방패는 내려놓지 마라.",
       need: function (ids) { return !has(ids, "sera") && cnt(ids, ["garen", "arthur", "kael"]) >= 2; } },
     { id: "liferune", name: "생명의 칸", desc: "세라 없이 · 레오 필살 → 전원 +15% · 첫 회 부활", line: "레오: 칸에 이름을 새기면, 그 사람은 다시 선다.",
       need: function (ids) { return !has(ids, "sera") && has(ids, "leo") && (has(ids, "noel") || has(ids, "lin")); } },
@@ -636,7 +636,7 @@
         if (gu.gx.regenLow) { var gl = lowestHp(living(s.allies)); if (gl && gl.hp < gl.maxHp) heal(gl, Math.round(gl.maxHp * gu.gx.regenLow), ev); }
       });
       if (s.mods.regen) { var rl = lowestHp(living(s.allies)); if (rl && rl.hp < rl.maxHp) heal(rl, Math.round(rl.maxHp * s.mods.regen), ev); }
-      if (SY(s, "bandage")) { var bl = lowestHp(living(s.allies)); if (bl && bl.hp < bl.maxHp) heal(bl, Math.round(bl.maxHp * 0.12), ev); }
+      if (SY(s, "bandage")) { var bl = lowestHp(living(s.allies)); if (bl && bl.hp < bl.maxHp) heal(bl, Math.round(bl.maxHp * 0.14), ev); }   // 12 → 14% (FCB-SYN-01: 명세 상한 18% 는 붕대 셋 s3 87% · s5 83% 로 세라 셋(73%)을 넘어 14% 로)
       s.allies.concat(s.enemies).forEach(function (u) {
         u.guard = false;
         if (u.cd > 0) u.cd -= 1;
